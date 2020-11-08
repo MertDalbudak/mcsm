@@ -1,0 +1,18 @@
+{
+    "ComputerName": "Raspberry",
+    "CPUArchitecture": "arm64",
+    "CPUFrequency": "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq",
+    "CPUTemperature": "/sys/class/thermal/thermal_zone0/temp",
+    "DownloadDir": "download/",
+    "McVersion": "1.16.4",
+    "ModelName": "Raspberry Pi 4B",
+    "ServerPath": "/media/autofs/Merts-HDD/paper/",
+    "ServerLogPath": "logs/latest.log",
+    "ServerUpdateHost": "papermc.io",
+    "ServerUpdatePath": "/api/v1/paper/1.16.4/latest/download",
+    "ServerOwner": "Mert Dalbudak",
+    "ServerRestartInterval": 4,
+    "ServerType": "Paper",
+    "Version": 1.0,
+    "WebManager": false
+}
