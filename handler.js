@@ -1,4 +1,7 @@
 const {exec, execSync} = require('child_process');
+const fs = require('fs').promises;
+const moment = require('moment');
+const config = require('./config.json');
 
 module.exports = class {
     constructor(){
@@ -20,7 +23,7 @@ module.exports = class {
 
     // SHUTDOWN WITH
     stop(timeout, announce_server = false, temp_threshold = true, kill = true){
-        if(typeof timeout != "number"){
+        if(isNaN(timeout)){
             console.error("First parameter must be number, " + typeof timeout + " given.");
             return false;
         }
@@ -43,11 +46,14 @@ module.exports = class {
             this.say("Shutting down in " + time_indication);
         }
         this.log("Stopping server in " + (timeout / 1000) + " seconds");
-        this.shutdown_timeout = setTimeout(()=>{
-            this.kill(kill);
-        }, timeout);
         this.stop_block = true;
-        return true;
+        return new Promise((resolve)=>{
+            this.shutdown_timeout = setTimeout(()=>{
+                this.kill(kill);
+                this.stop_block = false;
+                resolve(true);
+            }, timeout);
+        });
     }
 
     // LOG
@@ -95,5 +101,50 @@ module.exports = class {
     msg(player_name, msg){
         msg = msg.replace("\n", '\\n'); // Escape \n
         exec("screen -S minecraft -X stuff 'msg " + player_name + " " + msg + "\n'");
+    }
+
+    // BAN PLAYER
+    ban(player_name, reason = "Banned by server monitor", ban_time = "forever"){
+        execSync("screen -S minecraft -X stuff 'ban " + player_name + " \"" + reason + "\” \n'");
+        if(ban_time != "forever"){
+            let factor = 1;
+            switch(ban_time.substr(ban_time.length -1)){
+                case "m": // MINUTES
+                    factor = 60 * 1000;
+                    break;
+                case "h": // HOURS
+                    factor = 60 * 60 * 1000;
+                    break;
+                case "d": // DAYS
+                    factor = 24 * 60 * 60 * 1000;
+                    break;
+                case "w": // WEEKS
+                    factor = 7 * 24 * 60 * 60 * 1000;
+                    break;
+                default:
+                    return;
+            }
+            let expire_date = Date.now() + (ban_time.substr(0, ban_time.length -1) * factor);
+            setTimeout(async ()=> {
+                let banned_players = await fs.readFile(config.ServerPath + '/banned-players.json',{'encoding': "utf-8"});
+                banned_players = JSON.parse(banned_players);
+                console.log(banned_players);
+                if(Array.isArray(banned_players)){
+                    let banned_player = banned_players.find((player) => player.name == player_name);
+                    if(banned_player){
+                        banned_player.expires = moment(expire_date).format('YYYY-MM-DD HH:mm:ss ZZ');
+                        await fs.writeFile(config.ServerPath + '/banned-players.json', JSON.stringify(banned_players), {'encoding': "utf-8"});
+                    }
+                }
+            }, 2000);
+        }
+    }
+    addWhitelist(player_name){
+        execSync("screen -S minecraft -X stuff 'whitelist add " + player_name + "\n'");
+        execSync("screen -S minecraft -X stuff 'whitelist reload \n'");
+    }
+    removeWhitelist(player_name){
+        execSync("screen -S minecraft -X stuff 'whitelist remove " + player_name + "\n'");
+        execSync("screen -S minecraft -X stuff 'whitelist reload \n'");
     }
 }

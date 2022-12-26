@@ -1,0 +1,29 @@
+{
+  "name": "mcsm",
+  "version": "1.0.0",
+  "description": "A minecraft monitor server",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MertDalbudak/mcsm.git"
+  },
+  "keywords": [
+    "minecraft",
+    "server",
+    "nodejs"
+  ],
+  "author": "Mert Dalbudak",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/MertDalbudak/mcsm/issues"
+  },
+  "homepage": "https://github.com/MertDalbudak/mcsm#readme",
+  "dependencies": {
+    "cron": "^1.8.2",
+    "discord.js": "^14.7.1",
+    "moment": "^2.29.1"
+  }
+}

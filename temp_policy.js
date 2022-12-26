@@ -13,19 +13,19 @@
 
 const temperature_levels = [
 	{
-		"max_temp": 30,
+		"max_temp": 35,
 		"action": (...args) => ({
 			'log': "Server is running on cool temperature: " + args[0] + " °C"
 		})
 	},
 	{
-		"max_temp": 55,
+		"max_temp": 65,
 		"action": (...args) => ({
 			'log': "Server is running on moderat temperature: " + args[0] + " °C"
 		})
 	},
 	{
-		"max_temp": 65,
+		"max_temp": 70,
 		"action": (...args) => ({
 			'log': "Server is running on warm temperature: " + args[0] + " °C",
 			'say': "Running on warm temperature of " + args[0] + " °C"
@@ -36,17 +36,17 @@ const temperature_levels = [
 		"action": (...args) => ({
 			'log': [
 				"Server is running hot on: " + args[0] + " °C", 
-				"If the CPU temperature is not below 65 °C Server will shutdown shortly"
+				"If the CPU temperature is not below 70 °C Server will shutdown shortly"
 			],
 			'saySync': [
 				"Running on hot temperature of " + args[0] + " °C",
-				"If the CPU temperature is not below 65 °C Server will shutdown shortly"
+				"If the CPU temperature is not below 70 °C Server will shutdown shortly"
 			],
-			'stop': [60000, 10000, 65]
+			'stop': [60000, 10000, 70]
 		})
 	},
 	{
-		"max_temp": 85,
+		"max_temp": 90,
 		"action": (...args) => ({
 			'log': ["Server is running very hot on: " + args[0] + " °C", "Server is shutting down in 5 seconds"],
 			'say': "Running on very hot temperature of " + args[0] + " °C",
