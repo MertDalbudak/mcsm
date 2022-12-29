@@ -1,6 +1,8 @@
 const ServerMonitor = require(__dirname + "/ServerMonitor.js");
+const args = process.argv.slice(2);
+const server_id = args[0];
 
-const app = new ServerMonitor();
+const app = new ServerMonitor(server_id);
 
 // HEARTBEAT OF CHECKING THE VITAL PARAMETERS OF THE SERVER
 const check_interval = 15000; // time in ms
@@ -25,7 +27,7 @@ function main(){
 
 	app.checkKill();
 
-	app.Discord.on('ready',()=> {
+	app.Discord.client.on('ready',()=> {
 		app.discord_obey_command_temp();
 		app.discord_obey_command_list();
 		app.discord_obey_command_version();

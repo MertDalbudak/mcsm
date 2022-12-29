@@ -1,22 +1,56 @@
 {
-    "bin": "minecraft2 -n",
     "ComputerName": "Raspberry",
     "CPUArchitecture": "arm64",
     "CPUFrequency": "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq",
     "CPUTemperature": "/sys/class/thermal/thermal_zone0/temp",
+    "Discord": {
+        "commandPrefix": "/",
+        "deathMessage": "{{dying_player}} geberdi, hahahaha!",
+        "killMessage": "{{killed_by}} {{dying_player}}'in amini götünü dagitti"
+    },
     "DownloadDir": "/download",
-    "McVersion": "^1.17.1",
     "ModelName": "Raspberry Pi 4B",
-    "ServerPath": "/home/pi/paper",
-    "ServerLogPath": "/logs/latest.log",
-    "ServerOwner": "Mert Dalbudak",
+    "Servers": [
+        {
+            "id": 0,
+            "bin": "minecraft2 -n",
+            "path": "/home/pi/paper",
+            "logPath": "/logs/latest.log",
+            "owner": "Mert Dalbudak",
+            "type": "Paper",
+            "version": "^1.19.3",
+            "discord": {
+                "token": "MTA1MDkyMjE4MjQ4MzY1Njc4NA.G0vMmx.d2YE9NbRimQ9T5JeQFEQOZoTl0FsQ6Aum7t39o",
+                "channels":[
+                    {
+                        "id": "1050922361907597364",
+                        "name": "minecraft-activities"
+                    }
+                ]
+            }
+        },
+        {
+            "id": 1,
+            "bin": "paper2 -n",
+            "path": "/home/pi/paper2",
+            "logPath": "/logs/latest.log",
+            "owner": "Mert Dalbudak",
+            "type": "Paper",
+            "version": "^1.19.3",
+            "discord": {
+                "token": "MTA1MDkyMjE4MjQ4MzY1Njc4NA.G0vMmx.d2YE9NbRimQ9T5JeQFEQOZoTl0FsQ6Aum7t39o",
+                "channels":[
+                    {
+                        "id": "1057462190094950590",
+                        "name": "minecraft-activities"
+                    }
+                ]
+            }
+        }
+    ],
     "ServerRestartInterval": "0 */4 * * *",
     "ServerCheckUpdateInterval": "0 */12 * * *",
     "ServerLogCheckInterval": 20,
-    "ServerType": "Paper",
     "Version": 1.0,
-    "WebManager": false,
-    "DISCORD_BOT_TOKEN": "MTA1MDkyMjE4MjQ4MzY1Njc4NA.G0vMmx.d2YE9NbRimQ9T5JeQFEQOZoTl0FsQ6Aum7t39o",
-    "DISCORD_BOT_CHANNEL_NAME": "minecraft-activities",
-    "DISCORD_BOT_CHANNEL_ID": "1050922361907597364"
+    "WebManager": false
 }
