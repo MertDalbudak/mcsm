@@ -23,15 +23,20 @@ function main(){
 	// app.restartCron();
 
 	// BAN FLYING PLAYERS
+	
 	app.banFlying();
 
 	app.checkKill();
 
-	app.Discord.client.on('ready',()=> {
-		app.discord_obey_command_temp();
-		app.discord_obey_command_list();
-		app.discord_obey_command_version();
-		// app.discord_obey_command_banlist();
+	app.antiToxicity();
+
+	app.webService();
+
+	app.discord.on('ready',()=> {
+		app.discordObeyCommandList()
+		app.discordObeyCommandTemp()
+		app.discordObeyCommandVersion()
+		// app.discordObeyCommandBanlist()
 	});
 }
 

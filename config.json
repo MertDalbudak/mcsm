@@ -5,6 +5,7 @@
     "CPUTemperature": "/sys/class/thermal/thermal_zone0/temp",
     "Discord": {
         "commandPrefix": "/",
+        "commandRegisterInterval": 30000,
         "deathMessage": "{{dying_player}} geberdi, hahahaha!",
         "killMessage": "{{killed_by}} {{dying_player}}'in amini götünü dagitti"
     },
@@ -13,7 +14,10 @@
     "Servers": [
         {
             "id": 0,
-            "bin": "minecraft2 -n",
+            "bin": "minecraft2",
+            "binOptions": [
+                "-n"
+            ],
             "path": "/home/pi/paper",
             "logPath": "/logs/latest.log",
             "owner": "Mert Dalbudak",
@@ -21,17 +25,22 @@
             "version": "^1.19.3",
             "discord": {
                 "token": "MTA1MDkyMjE4MjQ4MzY1Njc4NA.G0vMmx.d2YE9NbRimQ9T5JeQFEQOZoTl0FsQ6Aum7t39o",
+                "clientId": "1050922182483656784",
                 "channels":[
                     {
                         "id": "1050922361907597364",
                         "name": "minecraft-activities"
                     }
                 ]
-            }
+            },
+            "ServerLogCheckInterval": 20
         },
         {
             "id": 1,
-            "bin": "paper2 -n",
+            "bin": "paper2",
+            "binOptions": [
+                "-n"
+            ],
             "path": "/home/pi/paper2",
             "logPath": "/logs/latest.log",
             "owner": "Mert Dalbudak",
@@ -39,18 +48,19 @@
             "version": "^1.19.3",
             "discord": {
                 "token": "MTA1MDkyMjE4MjQ4MzY1Njc4NA.G0vMmx.d2YE9NbRimQ9T5JeQFEQOZoTl0FsQ6Aum7t39o",
+                "clientId": "1050922182483656784",
                 "channels":[
                     {
                         "id": "1057462190094950590",
                         "name": "minecraft-activities"
                     }
                 ]
-            }
+            },
+            "ServerLogCheckInterval": 20
         }
     ],
     "ServerRestartInterval": "0 */4 * * *",
     "ServerCheckUpdateInterval": "0 */12 * * *",
-    "ServerLogCheckInterval": 20,
     "Version": 1.0,
     "WebManager": false
 }

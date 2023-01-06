@@ -1,7 +1,8 @@
 const fs = require('fs');
 const {get} = require('https');
-const {exec, execSync} = require('child_process');
+const {exec, execSync, spawn} = require('child_process');
 const Event = require('events');
+const net = require('net');
 const CronJob = require('cron').CronJob;
 const Handler = require('./handler.js');
 const Discord = require('./discord.js');
@@ -9,11 +10,12 @@ let config = require('./config.json');
 
 // LOAD RESOURCES
 const death_messages = require('./resources/death_messages.json');
+const swear_words = require('./resources/swear-words.json');
+const swear_words_regex = swear_words.join('|');
 
 module.exports = class {
     constructor(server_id = config.Servers[0]['id']){
-        this.mc_server;
-        this.server_id = server_id;
+        setServerId.bind(this)(server_id);
         this.monitor = {};
         this.handler = new Handler();
         this.temp_policy = require('./temp_policy.js');
@@ -21,47 +23,12 @@ module.exports = class {
         this.recent_system_freq = 0;
         this.event = new Event();
         this.update_permission_requested = false;
-        this.status = "running";
-        this.DaemonStatus = "not running";
-        this.Discord = new Discord(this.server_id);
-
-        // Watch change of logs
-        fs.watchFile(this.mc_server.path + this.mc_server.logPath, { 'persistent': true,  'interval': config.ServerLogCheckInterval}, (eventType, filename) => {
-            this.event.emit("logChange", filename);
-        });
-
-        // Watch change of ops
-        fs.watchFile(this.mc_server.path + '/ops.json', { 'persistent': true,  'interval': config.ServerLogCheckInterval}, (eventType, filename) => {
-            this.event.emit("opsChange", filename);
-        });
-
-        this.on('logChange', ()=>{
-            this.logLastLines(1, (line)=>{
-                console.log(line);
-                let parsed_line = this.parseLine(line);
-                if(parsed_line != null)
-                    this.event.emit("newLogLine", parsed_line);
-            });
-        });
+        this.status = "not running";
+        this.daemon_status = "not running";
+        this.discord = new Discord(this.server_id);
+        this.web_interface = false;
+        
         this.checkDaemon();
-    }
-    parseLine(line){
-        let report_info = line.match(/^\[[0-9]*:[0-9]*:[0-9]*\] \[(.)*\]:/);
-        if(report_info == null)
-            return null;
-        let parsed_line = {};
-        parsed_line.content = line.substr(report_info[0].length).trim();
-        parsed_line.date = new Date(Date.UTC());
-        try{
-            console.log(parsed_line.content.match(/\<.*\>|\[Server\]/));
-            parsed_line.initiator = parsed_line.content.match(/\<.*\>|\[Server\]/)[0].slice(1,-1); // STRING (NAME OF PLAYER)
-        } catch(err){
-            parsed_line.initiator = null;
-        }
-        parsed_line.message = parsed_line.initiator != null ? parsed_line.content.substr(parsed_line.initiator.length + 2).trim() : null;
-
-
-        return parsed_line;
     }
     reloadConfig(callback){
         this.event.emit('ConfigReload');
@@ -86,19 +53,24 @@ module.exports = class {
         });
     }
     restartDiscordService(){
-        this.Discord.logout();
-        this.Discord = new Discord(this.server_id);
-        let command_init = {
-            'temp': this.discord_obey_command_temp,
-            'list': this.discord_obey_command_list,
-            'version': this.discord_obey_command_version,
-            'banlist': this.discord_obey_command_banlist,
-        };
-        this.Discord.commands_obeyed.forEach(command_name => {
-            if(command_init.hasOwnProperty(command_name)){
-                command_init[command_name]();
-            }
-        })
+        if(this.discord){
+            this.discord.logout();
+            this.discord = new Discord(this.server_id);
+            let command_init = {
+                'temp': this.discordObeyCommandTemp,
+                'list': this.discordObeyCommandList,
+                'version': this.discordObeyCommandVersion,
+                'banlist': this.discordObeyCommandBanlist,
+            };
+            this.discord.commands_obeyed.forEach(command_name => {
+                if(command_init.hasOwnProperty(command_name)){
+                    command_init[command_name].bind(this)();
+                }
+            })
+        }
+        else{
+            console.error("Discord server is not running");
+        }
     }
     restartCron(cron = config.ServerRestartInterval){
         this.restart_cron = new CronJob(cron, ()=>{
@@ -108,7 +80,7 @@ module.exports = class {
             this.status = "restarting";
             this.handler.tellraw("@a", "Server will restart in 30 seconds", "yellow");
             this.handler.stop(30000, 5000, false, false).then(()=>{
-                this.once('DaemonStatusChange', (event)=>{
+                this.once('daemonStatusChange', (event)=>{
                     if(this.daemon_status == 'not running'){
                         console.log("restart closed", "starting...");
                         this.startServer(()=>{
@@ -130,29 +102,40 @@ module.exports = class {
     }
     checkDaemon(callback){
         exec("if screen -ls | grep -q 'minecraft'; then echo 1; else echo 0; fi",  (err, stdout, stderr)=>{
+            console.log("Server Manager Status: " + this.status);
             if(stdout == 0){
                 this.daemon_status = "not running";
                 if(this.status == "running"){
-                    console.error("Minecraft server is not running anymore", "Exiting...");
-                    process.exit();
+                    //console.error("Minecraft server is not running anymore", "Exiting...");
+                    //process.exit();
                 }
                 else{
                     switch(this.status){
                         case "restarting":
+                            this.status = "restart closed";
                             this.event.emit("restartClosed");
-                            this.status = "restarted";
                             break;
                         case "updating":
+                            this.status = "update downloading";
                             this.event.emit("updateClosed");
-                            this.status = "updateDownloading";
                             break;
                     }
                 }
             }
             else{
                 this.daemon_status = "running";
-                if(this.status == "updateComplete" || this.status == "restartComplete"){
-                    this.status = "running";
+                switch(this.status){
+                    case "not running":
+                        this.status = "running";
+                        break;
+                    case "restart closed":
+                        this.event.emit("restartComplete");
+                        this.status = "running";
+                        break;
+                    case "update installed":
+                        this.event.emit("updateComplete");
+                        this.status = "running";
+                        break;
                 }
             }
             if(callback){
@@ -210,20 +193,80 @@ module.exports = class {
             });
         }, interval_time);
     }
+    webService(){
+        this.web_interface = true;
+        // OPEN SOCKET INTERFACE FOR A WEBSERVICE
+        var server = net.createServer((socket)=> { //'connection' listener
+            console.log('server connected');
+            socket.on('data', async (data)=> {
+                try{
+                    data = JSON.parse(data.toString());
+                }catch(error){
+                    console.error("Request wasn't a valid json");
+                }
+                console.log(data);
+                if(data.authentication){
+                    switch(data.command.name){
+                        case "getTemp":
+                            socket.write(this.mcsw_msg_response(this.recent_system_temp.toString()))
+                            socket.pipe(socket);
+                            break;
+                        case "stopServer":
+                            this.stopServer((error, data)=>{
+                                if(error == null){
+                                    socket.write(this.mcsw_msg_response(data.message));
+                                }
+                                else{
+                                    socket.write(this.mcsw_error_response(error, data.message));
+                                }
+                                socket.pipe(socket);
+                            });
+                            break;
+                        case "startServer":
+                            this.startServer(data.command.args.id, (error, data) => {
+                                if(error == null){
+                                    socket.write(this.mcsw_msg_response(data.message));
+                                }
+                                else{
+                                    socket.write(this.mcsw_error_response(error, data.message));
+                                }
+                                socket.pipe(socket);
+                            });
+                            socket.write(this.mcsw_msg_response("Server start has been initialized", true));
+                            socket.pipe(socket);
+                            break;
+                        default:
+                            socket.write("Command not supported");
+                            socket.pipe(socket);
+                    }
+                }
+                else{
+                    socket.write("Authentication failed");
+                    socket.pipe(socket);
+                }
+            });
+            socket.on('end', function() {
+                console.log('server disconnected');
+            });
+        });
+        server.listen(8124, function() { //'listening' listener
+            console.log('Socket (8124) is listening');
+        });
+    }
     banFlying(){
-        this.on("newLogLine", (line)=>{
+        this.mc_server.on("newLogLine", (line)=>{
             // CHECK IF SOMEONE IS BEEN Kicked for flying
             let check = line.content.match(/(.)* lost connection: Flying is not enabled on this server/);
             if(check != null){
                 let flying_player = check[0].split(" ")[0];
-                this.Discord.send(`${flying_player} is banned for 24 hours because of flying`)
-                this.handler.say(`${flying_player} is banned for 24 hours because of flying`);
                 this.handler.ban(flying_player, "Flying is not allowed", '24h');
+                this.discord.send(`${flying_player} is banned for 24 hours because of flying`);
+                this.handler.say(`${flying_player} is banned for 24 hours because of flying`);
             }
         });
     }
     checkKill(){
-        this.on("newLogLine", (line)=>{
+        this.mc_server.on("newLogLine", (line)=>{
             // CHECK IF SOMEONE IS DEAD
             let check = null;
             let killed_by = null;
@@ -246,41 +289,55 @@ module.exports = class {
                 else{
                     death_message = config.Discord.deathMessage.replace('{{dying_player}}', dying_player);
                 }
-                this.Discord.send(death_message);
+                this.discord.send(death_message);
             }
         });
     }
-    discord_obey_command_list(){
-        this.Discord.obeyCommand('list', async ()=>{
-            let playerList = await this.mc_server.utils.checkPlayerList();
+    antiToxicity(){
+        this.mc_server.on("newLogLine", (line)=>{
+            if(line.message && line.initiator && line.initiator != "Server"){
+                if(line.message.match(swear_words_regex)){
+                    this.handler.say(`Watch your mouth ${line.initiator}, you filthy bastard.`);
+                }
+            }
+        });
+    }
+    discordObeyCommandList(){
+        this.discord.obeyCommand('list', async ()=>{
+            let playerList = await this.mc_server.getPlayerList();
             return `Aktuell ${playerList.length == 1 ? 'ist' : 'sind'} ${playerList.length} Spieler online. ${playerList.length > 0 ? `Online ${playerList.length == 1 ? 'ist' : 'sind'}:\r\n${playerList.join('\r\n')}` : ""}`;
         });
     }
-    discord_obey_command_version(){
-        this.Discord.obeyCommand('version', async ()=>{
-            let version = await this.mc_server.utils.getCurrentVersion();
-            console.log(version);
-            return version;
-        });
+    discordObeyCommandVersion(){
+        this.discord.obeyCommand('version', async ()=> await this.mc_server.getCurrentVersion());
     }
-    discord_obey_command_temp(){
-        this.Discord.obeyCommand('temp', () => `Server temperature is currently at: ${this.recent_system_temp}°C`);
+    discordObeyCommandTemp(){
+        this.discord.obeyCommand('temp', () => `Server temperature is currently at: ${this.recent_system_temp}°C`);
     }
-    discord_obey_command_banlist(){
-        const get_banlist = ()=> new Promise((resolve)=>{
-            fs.readFile(this.mc_server.path + '/banned-players.json', (err, data)=> {
-                if(err == null){
-                    try{
-                        const banned_players = JSON.parse(data);
-                        resolve(`Currently ${banned_players.length == 1 ? 'is' : 'are'} ${banned_players.length} player banned.${banned_players.length > 0 ? ` Banned ${banned_players.length == 1 ? 'is' : 'are'}:\r\n${banned_players.map(e => '> ' + e.name).join('\r\n')}` : ''}`);
-                    }
-                    catch(err){
-                        throw new Error('Failed to retrieve banned player list')
-                    }
+    async discordObeyCommandBanlist(){
+        const getBanlist = async ()=>{
+            const banned_players = await this.mc_server.getBanlist();
+            if(banned_players.length == 0){
+                return `Currently are ${banned_players.length} player banned.`;
+            }
+            else{
+                const banned_players_str = banned_players.map(e => '> ' + e.name).join('\r\n');
+                if(banned_players.length == 1){
+                    return `Currently is ${banned_players.length} player banned. Banned is:\r\n${banned_players_str}`;
                 }
-            })
-        });
-        this.Discord.obeyCommand('banlist', get_banlist);
+                else{
+                    return `Currently are ${banned_players.length} player banned. Banned are:\r\n${banned_players_str}`;
+                }
+            }
+        };
+        this.discord.obeyCommand('banlist', getBanlist);
+    }
+    discordUpdatePresence(){
+        const status = {
+            'name': ``,
+            'type': ``
+        }
+        this.discord.updatePresence();
     }
     async update(){
         if(this.status != "running")
@@ -297,28 +354,28 @@ module.exports = class {
         this.ops.forEach(player => {
             this.handler.tellraw(player, "A new version of paper is available, do you want to install the new Version? (Yes, No)", "yellow");
         });
-        console.log(this.mc_server.utils.ServerUpdateHost + this.mc_server.utils.ServerUpdatePath, `.${config.DownloadDir}/paper-${Date.now()}.jar`);
+        console.log(this.mc_server.ServerUpdateHost + this.mc_server.ServerUpdatePath, `.${config.DownloadDir}/paper-${Date.now()}.jar`);
         let confirm_update = (line)=>{
             if(this.ops.findIndex(e=> e == line.initiator) != -1){
                 if(this.status != "running")
                     return;
                 if(line.message == 'Yes'){
                     this.status = "updating";
-                    this.event.removeListener('newLogLine', confirm_update);
+                    this.mc_server.event.removeListener('newLogLine', confirm_update);
                     this.handler.tellraw(line.initiator, "Downloading new update...", "green");
                     this.handler.tellraw("@a", "Server will be updated. The server will shutdown in 30 seconds and will come back as soon as the update is completed.", "red");
                     this.handler.stop(30000, 5000, false, false).then(()=> {
                         // DOWNLOAD SERVER FILES
-                        this.download(this.mc_server.utils.ServerUpdateHost + this.mc_server.utils.ServerUpdatePath, "." + config.DownloadDir + "/paper-" + Date.now() + ".jar", (output_file)=>{
-                            this.status = "updateInstalling";
+                        this.download(this.mc_server.ServerUpdateHost + this.mc_server.ServerUpdatePath, "." + config.DownloadDir + "/paper-" + Date.now() + ".jar", (output_file)=>{
+                            this.status = "update installing";
                             this.emit("updateInstalling");
                             // INSTALL PROCESS
                             console.log("Installing new version of minecraft...");
                             //console.log(execSync(`ls -l .${config.DownloadDir}`).toString().trim());
-                            fs.unlinkSync(this.mc_server.path + this.mc_server.utils.ServerExecutable);
-                            fs.renameSync(output_file, this.mc_server.path + this.mc_server.utils.ServerExecutable);
-                            this.status = "updateComplete";
-                            this.handler.emit("updateComplete");
+                            fs.unlinkSync(this.mc_server.path + this.mc_server.ServerExecutable);
+                            fs.renameSync(output_file, this.mc_server.path + this.mc_server.ServerExecutable);
+                            this.status = "update installed";
+                            this.handler.emit("updateInstalled");
                             this.startServer();
                         });
                     });
@@ -328,7 +385,7 @@ module.exports = class {
                 }
             }
         };
-        this.on('newLogLine', confirm_update);
+        this.mc_server.on('newLogLine', confirm_update);
         this.update_permission_requested = true;
     }
     download(url, output_file, callback){
@@ -342,23 +399,18 @@ module.exports = class {
         request.on('error', (e) => console.error(e));
     }
 
-    fileReadLastLines(path, n, callback){
-        exec("tail -n " + n + " " + path, function(err, stdout, stderr){
-            callback(stdout.toString().trim());
-        });
+    mcsw_data_response(data, message, keep_alive = false){
+        return JSON.stringify({'error': null, 'data':{...data, 'message': message}, 'keep_alive': keep_alive});
     }
-    fileReadLastLinesSync(path, n){
-        console.log(execSync(`tail -n ${n} ${path}`).toString().trim());
-        return execSync(`tail -n ${n} ${path}`).toString().trim();
+
+    mcsw_error_response(error, message, keep_alive = false){
+        return JSON.stringify({'error': error, 'data':{'message': message}, 'keep_alive': keep_alive});
     }
-    logLastLines(n, callback){
-        this.fileReadLastLines(this.mc_server.path + this.mc_server.logPath, n, (lines)=>{
-            callback(lines);
-        });
+
+    mcsw_msg_response(message, keep_alive = false){
+        return JSON.stringify({'error': null, 'data':{'message': message}, 'keep_alive': keep_alive});
     }
-    logLastLinesSync(n){
-        return this.fileReadLastLinesSync(this.mc_server.path + this.mc_server.logPath, n)
-    }
+
     on(name, callback){ // THIS IS A SHORTCUT FOR ADDING AN EVENT LISTENER
         this.event.on(name, callback);
     }
@@ -366,18 +418,86 @@ module.exports = class {
         this.event.once(name, callback);
     }
 
-    startServer(callback){
-        this.checkDaemon((state)=>{
-            if(!state){
-                exec(this.mc_server.bin, (err, stdout, stderr) =>{
-                    console.log(err);
-                    console.log(stdout);
-                    console.log(stderr);
-                    setTimeout(()=> callback(), 3000);
+    startServer(id, callback){
+        if(!isNaN(id)){
+            if(this.suspend_mc_start){
+                callback("Starting and restarting are temporarily suspended", {})
+                return;
+            }
+            if(this.status == "restarting" || this.status == "starting"){
+                callback("An start up or restart is already in process.", {})
+                return;
+            }
+            if(this.mc_server.id != id){
+                //await this.discord.send(`The Minecraft server thats linked to this channel will be stopped`);
+            }
+            setServerId.bind(this)(id);
+            if(this.daemon_status == "running"){
+                this.handler.say("Server will stop on Web Request");
+                this.status = "restarting";
+                this.suspendMcStart();
+                this.handler.stop(0, false, false, false).then(()=>{
+                    this.once('restartClosed', ()=>{
+                        try{
+                            spawn('bash', [this.mc_server.bin, ...this.mc_server.binOptions], {
+                                slient: true,
+                                detached: true,
+                                stdio: [null, null, null, 'ipc']
+                            }).unref();
+                            this.discord.on('ready', ()=>{
+                                this.discord.send(`The Minecraft server thats linked to this channel has startet. You might be able to join the server in a minute.`);
+                            });
+                            callback(null, {'message': "Server has been started."});
+                        }
+                        catch(error){
+                            callback("Current server have been stopped but something went wrong starting the desired server", {'message': error})
+                            console.log(error);
+                        }
+                    });
                 });
             }
-            console.log(state);
-        });
+            else{
+                if(this.status == "not running"){
+                    this.status = "starting";
+                    this.suspendMcStart();
+                    try{
+                        spawn('bash', [this.mc_server.bin, ...this.mc_server.binOptions], {
+                            slient: true,
+                            detached: true,
+                            stdio: [null, null, null, 'ipc']
+                        }).unref();
+                        this.discord.on('ready', ()=>{
+                            this.discord.send(`The Minecraft server thats linked to this channel has startet. You might be able to join the server in a minute.`);
+                        });
+                        callback(null, {'message': "Server has been started."});
+                    }
+                    catch(error){
+                        callback("An error occured starting the server.", {'message': error})
+                        console.log(error);
+                    }
+                }
+                else{
+                    callback("Another process is currently running please check again later", {})
+                }
+            }
+        }
+    }
+    stopServer(callback){
+        this.handler.say("Server will stop on Web Request");
+        this.discord.send(`The Minecraft server thats linked to this channel will be stopped`).then(()=>{
+            this.handler.stop(0, false, false, false).then(()=>{
+                callback(null, {'message': "Server has been stopped"});
+            });
+        })
+    }
+
+    suspendMcStart(){
+        if(suspend_mc_start == false){
+            suspend_mc_start = true;
+            setTimeout(() => {
+                suspend_mc_start = false;
+            }, 3 * 60 * 1000);
+        }
     }
 
     // GETTER
@@ -391,23 +511,33 @@ module.exports = class {
         return require(`${this.mc_server.path}/ops.json`).map(e => e.name);
     }
     get daemon_status (){
-        return this.DaemonStatus;
+        return daemon_status;
+    }
+    get suspend_mc_start(){
+        return suspend_mc_start;
     }
     // SETTER
     set daemon_status(status){
-        this.DaemonStatus = status;
-        this.event.emit('DaemonStatusChange', status);
-    }
-    set server_id(id){
-        this.mc_server = config.Servers.find(server => server.id == id);
-        const server_utils = require(`./Server/${this.mc_server.type}`);
-        this.mc_server.utils = {
-            'newVersionAvailable': server_utils.newVersionAvailable.bind(this),
-            'getCurrentVersion': server_utils.getCurrentVersion.bind(this),
-            'checkPlayerList': server_utils.checkPlayerList.bind(this),
-            'ServerExecutable': server_utils.ServerExecutable,
-            'ServerUpdateHost': server_utils.ServerUpdateHost,
-            'ServerUpdatePath': server_utils.ServerUpdatePath
-        }
+        daemon_status = status;
+        this.event.emit('daemonStatusChange', status);
     }
 };
+
+
+// PRIVATE VAR
+let daemon_status = "";
+let suspend_mc_start = false;
+
+// PRIVATE FUNCTIONS
+
+function setServerId(id){
+    const mc_server_config = config.Servers.find(server => server.id == id);
+    if(mc_server_config){
+        const mc_server = require(`./Server/${mc_server_config.type}`);
+        this.mc_server = new mc_server(mc_server_config);
+        if(this.discord){
+            this.restartDiscordService();
+        }
+        //fs.writeFileSync('./DaemonEnv', "SERVER_ID=" + id);
+    }
+}

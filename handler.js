@@ -14,10 +14,12 @@ module.exports = class {
     }
 
     // SHUTDOWN SERVER AND EXITS
-    kill(kill_all = true){
+    kill(kill_all = true, callback){
         exec("screen -S minecraft -X stuff 'stop\n'", (err, stdout, stderr)=> {
             if(kill_all)
                 process.exit();
+            if(callback)
+                callback();
         });
     }
 
@@ -49,9 +51,10 @@ module.exports = class {
         this.stop_block = true;
         return new Promise((resolve)=>{
             this.shutdown_timeout = setTimeout(()=>{
-                this.kill(kill);
-                this.stop_block = false;
-                resolve(true);
+                this.kill(kill, ()=>{
+                    this.stop_block = false;
+                    resolve(true);
+                });
             }, timeout);
         });
     }
