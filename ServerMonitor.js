@@ -4,9 +4,12 @@ const {exec, execSync, spawn} = require('child_process');
 const Event = require('events');
 const net = require('net');
 const CronJob = require('cron').CronJob;
-const Handler = require('./handler.js');
+const Handler = require('./Handler.js/index.js');
 const Discord = require('./discord.js');
 let config = require('./config.json');
+
+// GLOBAL
+const DIR_NAME = __dirname;
 
 // LOAD RESOURCES
 const death_messages = require('./resources/death_messages.json');
@@ -17,7 +20,7 @@ module.exports = class {
     constructor(server_id = config.Servers[0]['id']){
         setServerId.bind(this)(server_id);
         this.monitor = {};
-        this.handler = new Handler();
+        this.handler = new Handler(server_id);
         this.temp_policy = require('./temp_policy.js');
         this.recent_system_temp = 0.00;
         this.recent_system_freq = 0;
@@ -106,6 +109,7 @@ module.exports = class {
             if(stdout == 0){
                 this.daemon_status = "not running";
                 if(this.status == "running"){
+                    this.status = "not running";
                     //console.error("Minecraft server is not running anymore", "Exiting...");
                     //process.exit();
                 }
@@ -126,6 +130,10 @@ module.exports = class {
                 this.daemon_status = "running";
                 switch(this.status){
                     case "not running":
+                        this.status = "running";
+                        break;
+                    case "starting":
+                        this.event.emit('serverStarted');
                         this.status = "running";
                         break;
                     case "restart closed":
@@ -223,6 +231,13 @@ module.exports = class {
                             });
                             break;
                         case "startServer":
+                            if(this.suspend_mc_start){
+                                socket.write(this.mcsw_error_response("Starting and restarting are temporarily suspended", false));
+                                socket.pipe(socket);
+                                return;
+                            }
+                            socket.write(this.mcsw_msg_response("Server start has been initialized", true));
+                            socket.pipe(socket, {'end': false});
                             this.startServer(data.command.args.id, (error, data) => {
                                 if(error == null){
                                     socket.write(this.mcsw_msg_response(data.message));
@@ -232,7 +247,9 @@ module.exports = class {
                                 }
                                 socket.pipe(socket);
                             });
-                            socket.write(this.mcsw_msg_response("Server start has been initialized", true));
+                            break;
+                        case "getSlotList":
+                            socket.write(this.mcsw_data_response(config.Slots, "all good"));
                             socket.pipe(socket);
                             break;
                         default:
@@ -249,8 +266,8 @@ module.exports = class {
                 console.log('server disconnected');
             });
         });
-        server.listen(8124, function() { //'listening' listener
-            console.log('Socket (8124) is listening');
+        server.listen(config.MCSM_API_PORT, function() { //'listening' listener
+            console.log(`Socket (${config.MCSM_API_PORT}) is listening`);
         });
     }
     banFlying(){
@@ -296,7 +313,7 @@ module.exports = class {
     antiToxicity(){
         this.mc_server.on("newLogLine", (line)=>{
             if(line.message && line.initiator && line.initiator != "Server"){
-                if(line.message.match(swear_words_regex)){
+                if(line.message.toLowerCase().match(swear_words_regex)){
                     this.handler.say(`Watch your mouth ${line.initiator}, you filthy bastard.`);
                 }
             }
@@ -318,15 +335,15 @@ module.exports = class {
         const getBanlist = async ()=>{
             const banned_players = await this.mc_server.getBanlist();
             if(banned_players.length == 0){
-                return `Currently are ${banned_players.length} player banned.`;
+                return `No players are banned currently.`;
             }
             else{
                 const banned_players_str = banned_players.map(e => '> ' + e.name).join('\r\n');
                 if(banned_players.length == 1){
-                    return `Currently is ${banned_players.length} player banned. Banned is:\r\n${banned_players_str}`;
+                    return `Currently ${banned_players.length} is player banned. Banned is:\r\n${banned_players_str}`;
                 }
                 else{
-                    return `Currently are ${banned_players.length} player banned. Banned are:\r\n${banned_players_str}`;
+                    return `Currently ${banned_players.length} are players banned. Banned are:\r\n${banned_players_str}`;
                 }
             }
         };
@@ -400,15 +417,15 @@ module.exports = class {
     }
 
     mcsw_data_response(data, message, keep_alive = false){
-        return JSON.stringify({'error': null, 'data':{...data, 'message': message}, 'keep_alive': keep_alive});
+        return JSON.stringify({'error': null, 'data': data, 'message': message, 'keep_alive': keep_alive});
     }
 
     mcsw_error_response(error, message, keep_alive = false){
-        return JSON.stringify({'error': error, 'data':{'message': message}, 'keep_alive': keep_alive});
+        return JSON.stringify({'error': error, 'message': message, 'keep_alive': keep_alive});
     }
 
     mcsw_msg_response(message, keep_alive = false){
-        return JSON.stringify({'error': null, 'data':{'message': message}, 'keep_alive': keep_alive});
+        return JSON.stringify({'error': null, 'message': message, 'keep_alive': keep_alive});
     }
 
     on(name, callback){ // THIS IS A SHORTCUT FOR ADDING AN EVENT LISTENER
@@ -420,10 +437,6 @@ module.exports = class {
 
     startServer(id, callback){
         if(!isNaN(id)){
-            if(this.suspend_mc_start){
-                callback("Starting and restarting are temporarily suspended", {})
-                return;
-            }
             if(this.status == "restarting" || this.status == "starting"){
                 callback("An start up or restart is already in process.", {})
                 return;
@@ -432,6 +445,13 @@ module.exports = class {
                 //await this.discord.send(`The Minecraft server thats linked to this channel will be stopped`);
             }
             setServerId.bind(this)(id);
+            const spawn_options = {
+                slient: true,
+                detached: true,
+                stdio: 'ignore',
+                shell: false,
+                windowsHide: true
+            }
             if(this.daemon_status == "running"){
                 this.handler.say("Server will stop on Web Request");
                 this.status = "restarting";
@@ -439,13 +459,10 @@ module.exports = class {
                 this.handler.stop(0, false, false, false).then(()=>{
                     this.once('restartClosed', ()=>{
                         try{
-                            spawn('bash', [this.mc_server.bin, ...this.mc_server.binOptions], {
-                                slient: true,
-                                detached: true,
-                                stdio: [null, null, null, 'ipc']
-                            }).unref();
+                            const mc_server_spawn = spawn('bash', [this.mc_server.bin, ...this.mc_server.binOptions], spawn_options);
+                            mc_server_spawn.unref();
                             this.discord.on('ready', ()=>{
-                                this.discord.send(`The Minecraft server thats linked to this channel has startet. You might be able to join the server in a minute.`);
+                                this.discord.send(`The Minecraft server thats linked to this channel has started. You might be able to join the server in a minute.`);
                             });
                             callback(null, {'message': "Server has been started."});
                         }
@@ -461,13 +478,10 @@ module.exports = class {
                     this.status = "starting";
                     this.suspendMcStart();
                     try{
-                        spawn('bash', [this.mc_server.bin, ...this.mc_server.binOptions], {
-                            slient: true,
-                            detached: true,
-                            stdio: [null, null, null, 'ipc']
-                        }).unref();
+                        const mc_server_spawn = spawn('bash', [this.mc_server.bin, ...this.mc_server.binOptions], spawn_options);
+                        mc_server_spawn.unref();
                         this.discord.on('ready', ()=>{
-                            this.discord.send(`The Minecraft server thats linked to this channel has startet. You might be able to join the server in a minute.`);
+                            this.discord.send(`The Minecraft server thats linked to this channel has started. You might be able to join the server in a minute.`);
                         });
                         callback(null, {'message': "Server has been started."});
                     }
@@ -535,9 +549,17 @@ function setServerId(id){
     if(mc_server_config){
         const mc_server = require(`./Server/${mc_server_config.type}`);
         this.mc_server = new mc_server(mc_server_config);
+        this.handler = new Handler(id);
         if(this.discord){
             this.restartDiscordService();
         }
-        //fs.writeFileSync('./DaemonEnv', "SERVER_ID=" + id);
+        fs.writeFile(DIR_NAME + '/DaemonEnv', "SERVER_ID=" + id, (error)=>{
+            if(error){
+                console.error("Updating DaemonEnv failed", error.toString());
+            }
+            else{
+                console.log('DaemonEnv updated successfully');
+            }
+        });
     }
 }

@@ -1,8 +1,10 @@
-const ServerMonitor = require(__dirname + "/ServerMonitor.js");
+//const ServerMonitor = require(__dirname + "/ServerMonitor.js");
+const ServerManager = require(__dirname + "/ServerManager.js");
 const args = process.argv.slice(2);
 const server_id = args[0];
 
-const app = new ServerMonitor(server_id);
+//const app = new ServerMonitor(server_id);
+const app = new ServerManager(server_id);
 
 // HEARTBEAT OF CHECKING THE VITAL PARAMETERS OF THE SERVER
 const check_interval = 15000; // time in ms
@@ -19,25 +21,26 @@ function main(){
 	//app.frequency(check_interval);
 
 	// TIME INTERVAL OF SERVER BEING RESTARTET
-	//app.restartCron('*/1 * * * *');
+	// app.restartCron('*/1 * * * *');
 	// app.restartCron();
 
 	// BAN FLYING PLAYERS
 	
-	app.banFlying();
+	//app.banFlying();
 
-	app.checkKill();
+	//app.checkKill();
 
-	app.antiToxicity();
+	//app.antiToxicity();
 
 	app.webService();
 
-	app.discord.on('ready',()=> {
+	/*app.discord.on('ready',()=> {
 		app.discordObeyCommandList()
 		app.discordObeyCommandTemp()
 		app.discordObeyCommandVersion()
-		// app.discordObeyCommandBanlist()
+		app.discordObeyCommandBanlist()
 	});
+	*/
 }
 
-main();
+app.on('ready', ()=> main());

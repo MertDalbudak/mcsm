@@ -7,7 +7,6 @@
 	action['stop'] 		->	Server shutdown					
 		action['stop'][0] -> Time before server shutdown in ms
 		action['stop'][1] -> Server shutdown announcement interval in ms
-		action['stop'][2] -> Abort server shutdown when temperature below value
 	action['kill']	->	Kill Server
 */
 
@@ -42,7 +41,7 @@ const temperature_levels = [
 				"Running on hot temperature of " + args[0] + " °C",
 				"If the CPU temperature is not below 70 °C Server will shutdown shortly"
 			],
-			'stop': [60000, 10000, 70]
+			'stop': [60000, 10000]
 		})
 	},
 	{

@@ -11,9 +11,24 @@
     },
     "DownloadDir": "/download",
     "ModelName": "Raspberry Pi 4B",
+    "MCSM_API_PORT": 8124,
+    "Slots": [
+        {
+            "id": 1,
+            "host": "mc.dalbudak.de",
+            "port": 25565,
+            "srvRecord": false
+        },
+        {
+            "id": 2,
+            "host": "mc2.dalbudak.de",
+            "port": 25566,
+            "srvRecord": true
+        }
+    ],
     "Servers": [
         {
-            "id": 0,
+            "id": 1,
             "bin": "minecraft2",
             "binOptions": [
                 "-n"
@@ -24,7 +39,7 @@
             "type": "Paper",
             "version": "^1.19.3",
             "discord": {
-                "token": "MTA1MDkyMjE4MjQ4MzY1Njc4NA.G0vMmx.d2YE9NbRimQ9T5JeQFEQOZoTl0FsQ6Aum7t39o",
+                "token": "MTA1MDkyMjE4MjQ4MzY1Njc4NA.Gk7Z1E.2_w5LTLpoRe4xKuEl3Oath5LEG8ZukhGazfC70",
                 "clientId": "1050922182483656784",
                 "channels":[
                     {
@@ -36,7 +51,7 @@
             "ServerLogCheckInterval": 20
         },
         {
-            "id": 1,
+            "id": 2,
             "bin": "paper2",
             "binOptions": [
                 "-n"
@@ -47,7 +62,7 @@
             "type": "Paper",
             "version": "^1.19.3",
             "discord": {
-                "token": "MTA1MDkyMjE4MjQ4MzY1Njc4NA.G0vMmx.d2YE9NbRimQ9T5JeQFEQOZoTl0FsQ6Aum7t39o",
+                "token": "MTA1MDkyMjE4MjQ4MzY1Njc4NA.Gk7Z1E.2_w5LTLpoRe4xKuEl3Oath5LEG8ZukhGazfC70",
                 "clientId": "1050922182483656784",
                 "channels":[
                     {
@@ -62,5 +77,5 @@
     "ServerRestartInterval": "0 */4 * * *",
     "ServerCheckUpdateInterval": "0 */12 * * *",
     "Version": 1.0,
-    "WebManager": false
+    "WebAPI": true
 }

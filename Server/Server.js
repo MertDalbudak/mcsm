@@ -1,15 +1,34 @@
-const fs = require('fs');
+const fs = require('fs').promises;
+fs.watch = require('fs').watch; // USE STANDARD WATCH INSTEAD OF fs/promise.watch
+
 const Event = require('events');
+const {get} = require('https');
 const {exec, execSync} = require('child_process');
+const CronJob = require('cron').CronJob;
+const config = require('../config.json');
+
+const Handler = require('../Handler.js');
+const Discord = require('../Discord.js');
+
 const ops_path = "/ops.json";
 const whitelist_path = "/whitelist.json";
 const banned_ips_path = "/banned-ips.json";
 const banned_players_path = "/banned-players.json";
 
 
+// LOAD RESOURCES
+const death_messages = require('../resources/death_messages.json');
+const swear_words = require('../resources/swear-words.json');
+const swear_words_regex = swear_words.join('|');
+
+
 class Server {
-    constructor(config){
-        Object.assign(this, config);
+    constructor(id){
+        Object.assign(this, config.Servers.find(e => e.id == id));
+        if(isNaN(this.id)){
+            throw new Error(`No server with given id ${id} found.`);
+        }
+        this.event = new Event();
         this.currentPlayers = [];
         this.maxPlayers = 0;
         this.ServerExecutable;
@@ -23,41 +42,25 @@ class Server {
         this.banned_ips_path = this.path + banned_ips_path;
         this.banned_players_path = this.path + banned_players_path;
 
-        this.ops = fs.readFileSync(this.path + ops_path, {'encoding': 'utf-8'});
-        this.whitelist = fs.readFileSync(this.whitelist_path, {'encoding': 'utf-8'});
-        this.banned_ips = fs.readFileSync(this.banned_ips_path, {'encoding': 'utf-8'});
-        this.banned_players = fs.readFileSync(this.banned_players_path, {'encoding': 'utf-8'});
+        
+        this.handler = new Handler(this.id);
+        this.discord = new Discord(this.id);
 
-        this.event = new Event();
+        this.update_permission_requested = false;
+        this.init();
+    }
+    async init(){
+        this.ops = fs.readFile(this.path + ops_path, {'encoding': 'utf-8'});
+        this.whitelist = fs.readFile(this.whitelist_path, {'encoding': 'utf-8'});
+        this.banned_ips = fs.readFile(this.banned_ips_path, {'encoding': 'utf-8'});
+        this.banned_players = fs.readFile(this.banned_players_path, {'encoding': 'utf-8'});
 
         // Watch change of logs
-        fs.watchFile(this.path + this.logPath, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, async (eventType, filename) => {
+        console.log(this.path + this.logPath);
+        fs.watch(this.path + this.logPath, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, (eventType, filename) => {
             this.event.emit("logChange", filename);
         });
 
-        // Watch change of ops
-        fs.watchFile(this.ops_path, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, async (eventType, filename) => {
-            this.event.emit("opsChange", filename);
-            this.ops = fs.readFileSync(this.ops_path, {'encoding': 'utf-8'});
-            this.event.emit("opsChanged", filename);
-        });
-
-        // Watch change of whitelist
-        fs.watchFile(this.whitelist_path, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, async (eventType, filename) => {
-            let new_whitelist = fs.readFileSync(this.whitelist_path, {'encoding': 'utf-8'})
-            this.event.emit("whitelistChange", {'current': this.banned_players, 'new': new_whitelist});
-            this.whitelist = new_whitelist;
-            this.event.emit("whitelistChanged", filename);
-        });
-
-        // Watch change of banned players
-        fs.watchFile(this.banned_players_path, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, async (eventType, filename) => {
-            const new_banned_players = fs.readFileSync(this.banned_players_path, {'encoding': 'utf-8'});
-            this.event.emit("bannedPlayersChange", {'current': this.banned_players, 'new': new_banned_players});
-            this.banned_players = new_banned_players;
-            this.event.emit("bannedPlayersChanged", filename);
-        });
-        
         this.on('logChange', ()=>{
             this.logLastLines(1, (line)=>{
                 console.log(line);
@@ -67,6 +70,43 @@ class Server {
                 }
             });
         });
+
+        Promise.all([this.ops, this.whitelist, this.banned_ips, this.banned_players]).then(async()=>{
+            this.ops = await this.ops;
+            this.whitelist = await this.whitelist;
+            this.banned_ips = await this.banned_ips;
+            this.banned_players = await this.banned_players;
+
+            // Watch change of ops
+            fs.watch(this.ops_path, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, (eventType, filename) => {
+                this.event.emit("opsChange", filename);
+                fs.readFile(this.ops_path, {'encoding': 'utf-8'}).then((data)=>{
+                    this.event.emit("opsChange", {'current': this.ops, 'new': data});
+                    this.ops = data;
+                    this.event.emit("opsChanged", filename);
+                });
+            });
+
+            // Watch change of whitelist
+            fs.watch(this.whitelist_path, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, (eventType, filename) => {
+                fs.readFile(this.whitelist_path, {'encoding': 'utf-8'}).then((data)=>{
+                    this.event.emit("whitelistChange", {'current': this.banned_players, 'new': data});
+                    this.whitelist = data;
+                    this.event.emit("whitelistChanged", filename);
+                });
+            });
+
+            // Watch change of banned players
+            fs.watch(this.banned_players_path, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, (eventType, filename) => {
+                fs.readFileSync(this.banned_players_path, {'encoding': 'utf-8'}).then((data)=>{
+                    this.event.emit("bannedPlayersChange", {'current': this.banned_players, 'new': data});
+                    this.banned_players = data;
+                    this.event.emit("bannedPlayersChanged", filename);
+                })
+            });
+
+            this.event.emit('ready');
+        })
     }
     fileReadLastLines(path, n, callback){
         exec("tail -n " + n + " " + path, function(err, stdout, stderr){
@@ -74,7 +114,6 @@ class Server {
         });
     }
     fileReadLastLinesSync(path, n){
-        console.log(execSync(`tail -n ${n} ${path}`).toString().trim());
         return execSync(`tail -n ${n} ${path}`).toString().trim();
     }
     logLastLines(n, callback){
@@ -102,6 +141,209 @@ class Server {
 
         return parsed_line;
     }
+
+    restartCron(cron = config.ServerRestartInterval){
+        this.restart_cron = new CronJob(cron, ()=>{
+            if(this.status != "running")
+                return false;
+            this.status = "restarting";
+            this.handler.tellraw("@a", "Server will restart in 30 seconds", "yellow");
+            this.handler.stop(30000, 5000, false, false).then(()=>{
+                this.once('daemonStatusChange', (event)=>{
+                    if(this.daemon_status == 'not running'){
+                        console.log("restart closed", "starting...");
+                        this.startServer(()=>{
+                            this.status = "restartComplete";
+                            this.event.emit('restartComplete');
+                        });
+                    }
+                    else {
+                        throw new Error("Daemon still Alive");
+                    }
+                });
+            })
+        }, null, true, 'Europe/Berlin');
+        this.restart_cron.start();
+    }
+    
+    updateCron(){
+        this.update_cron = new CronJob(config.ServerCheckUpdateInterval, this.update, null, true, 'Europe/Berlin');
+        this.update_cron.start();
+    }
+
+    antiToxicity(){
+        this.mc_server.on("newLogLine", (line)=>{
+            if(line.message && line.initiator && line.initiator != "Server"){
+                if(line.message.toLowerCase().match(swear_words_regex)){
+                    this.handler.say(`Watch your mouth ${line.initiator}, you filthy bastard.`);
+                }
+            }
+        });
+    }
+
+    banFlying(){
+        this.mc_server.on("newLogLine", (line)=>{
+            // CHECK IF SOMEONE IS BEEN Kicked for flying
+            let check = line.content.match(/(.)* lost connection: Flying is not enabled on this server/);
+            if(check != null){
+                let flying_player = check[0].split(" ")[0];
+                this.handler.ban(flying_player, "Flying is not allowed", '24h');
+                this.discord.send(`${flying_player} is banned for 24 hours because of flying`);
+                this.handler.say(`${flying_player} is banned for 24 hours because of flying`);
+            }
+        });
+    }
+
+    checkKill(){
+        this.mc_server.on("newLogLine", (line)=>{
+            // CHECK IF SOMEONE IS DEAD
+            let check = null;
+            let killed_by = null;
+            for(let i = 0; i < death_messages.length; i++){
+                const check_kill = new RegExp(`([^<>]+) ${death_messages[i]}`);
+                check = line.content.match(check_kill);
+                if(check != null){
+                    if(i < 28){
+                        killed_by = line.content.split(" ").slice(-1)   
+                    }
+                    break;
+                }
+            }
+            if(check != null){
+                let dying_player = check[0].split(" ")[0];
+                let death_message = "";
+                if(killed_by != null){
+                    death_message = config.Discord.killMessage.replace('{{killed_by}}', killed_by).replace('{{dying_player}}', dying_player);
+                }
+                else{
+                    death_message = config.Discord.deathMessage.replace('{{dying_player}}', dying_player);
+                }
+                this.discord.send(death_message);
+            }
+        });
+    }
+
+    discordObeyCommandList(){
+        this.discord.obeyCommand('list', async ()=>{
+            let playerList = await this.mc_server.getPlayerList();
+            return `Aktuell ${playerList.length == 1 ? 'ist' : 'sind'} ${playerList.length} Spieler online. ${playerList.length > 0 ? `Online ${playerList.length == 1 ? 'ist' : 'sind'}:\r\n${playerList.join('\r\n')}` : ""}`;
+        });
+    }
+    discordObeyCommandVersion(){
+        this.discord.obeyCommand('version', async ()=> await this.mc_server.getCurrentVersion());
+    }
+    discordObeyCommandTemp(){
+        this.discord.obeyCommand('temp', () => `Server temperature is currently at: ${this.recent_system_temp}°C`);
+    }
+    async discordObeyCommandBanlist(){
+        const getBanlist = async ()=>{
+            const banned_players = await this.mc_server.getBanlist();
+            if(banned_players.length == 0){
+                return `No players are banned currently.`;
+            }
+            else{
+                const banned_players_str = banned_players.map(e => '> ' + e.name).join('\r\n');
+                if(banned_players.length == 1){
+                    return `Currently ${banned_players.length} is player banned. Banned is:\r\n${banned_players_str}`;
+                }
+                else{
+                    return `Currently ${banned_players.length} are players banned. Banned are:\r\n${banned_players_str}`;
+                }
+            }
+        };
+        this.discord.obeyCommand('banlist', getBanlist);
+    }
+    
+    discordUpdatePresence(){
+        const status = {
+            'name': ``,
+            'type': ``
+        }
+        this.discord.updatePresence();
+    }
+
+    restartDiscordService(){
+        if(this.discord){
+            this.discord.logout();
+            this.discord = new Discord(this.server_id);
+            let command_init = {
+                'temp': this.discordObeyCommandTemp,
+                'list': this.discordObeyCommandList,
+                'version': this.discordObeyCommandVersion,
+                'banlist': this.discordObeyCommandBanlist,
+            };
+            this.discord.commands_obeyed.forEach(command_name => {
+                if(command_init.hasOwnProperty(command_name)){
+                    command_init[command_name].bind(this)();
+                }
+            })
+        }
+        else{
+            console.error("Discord server is not running");
+        }
+    }
+
+    async update(){
+        if(this.status != "running")
+            return false;
+        if(this.update_permission_requested){
+            console.log("Permission to update already requested")
+            return false;
+        }
+        if(await this.newVersionAvailable() == false){
+            console.log("Already running on the latest version")
+            return false;
+        }
+        // ASK FOR PERMITION TO UPDATE PAPER ( ONLY OP's CAN CONFIRM )
+        this.ops.forEach(player => {
+            this.handler.tellraw(player, "A new version of paper is available, do you want to install the new Version? (Yes, No)", "yellow");
+        });
+        console.log(this.mc_server.ServerUpdateHost + this.mc_server.ServerUpdatePath, `.${config.DownloadDir}/paper-${Date.now()}.jar`);
+        let confirm_update = (line)=>{
+            if(this.ops.findIndex(e=> e == line.initiator) != -1){
+                if(this.status != "running")
+                    return;
+                if(line.message == 'Yes'){
+                    this.status = "updating";
+                    this.mc_server.event.removeListener('newLogLine', confirm_update);
+                    this.handler.tellraw(line.initiator, "Downloading new update...", "green");
+                    this.handler.tellraw("@a", "Server will be updated. The server will shutdown in 30 seconds and will come back as soon as the update is completed.", "red");
+                    this.handler.stop(30000, 5000, false, false).then(()=> {
+                        // DOWNLOAD SERVER FILES
+                        this.download(this.mc_server.ServerUpdateHost + this.mc_server.ServerUpdatePath, "." + config.DownloadDir + "/paper-" + Date.now() + ".jar", (output_file)=>{
+                            this.status = "update installing";
+                            this.emit("updateInstalling");
+                            // INSTALL PROCESS
+                            console.log("Installing new version of minecraft...");
+                            //console.log(execSync(`ls -l .${config.DownloadDir}`).toString().trim());
+                            fs.unlinkSync(this.mc_server.path + this.mc_server.ServerExecutable);
+                            fs.renameSync(output_file, this.mc_server.path + this.mc_server.ServerExecutable);
+                            this.status = "update installed";
+                            this.handler.emit("updateInstalled");
+                            this.startServer();
+                        });
+                    });
+                }
+                else{
+                    this.handler.tellraw(line.initiator, "Not updating", "black");
+                }
+            }
+        };
+        this.mc_server.on('newLogLine', confirm_update);
+        this.update_permission_requested = true;
+    }
+
+    download(url, output_file, callback){
+        const download = fs.createWriteStream(output_file);
+        console.log("downloading");
+        const request = get("https://" + url, function(response) {
+            response.pipe(download);
+            response.on('error', (e) => console.error(e));
+        });
+        request.on('finish', ()=> callback(output_file));
+        request.on('error', (e) => console.error(e));
+    }
+
     on(name, callback){ // THIS IS A SHORTCUT FOR ADDING AN EVENT LISTENER
         this.event.on(name, callback);
     }
@@ -109,6 +351,7 @@ class Server {
         this.event.once(name, callback);
     }
 
+    // GETTER
     get currentPlayerCount(){
         return this.currentPlayerCount.length();
     }
