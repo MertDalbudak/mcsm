@@ -42,44 +42,7 @@ class Paper extends Server {
                         const last_line = this.logLastLinesSync(10);
                         console.log(last_line);
                         resolve(last_line.match("[0-9]* version\\(s\\) behind") !== null);
-                    }, 3500)
-                });
-            });
-        });
-    }
-    getCurrentVersion(){
-        console.log("Checking for paper updates...");
-        return new Promise((resolve, reject)=>{
-            this.handler.input('version', ()=>{
-                this.once("logChange", ()=> {
-                    setTimeout(()=>{
-                        const last_line = this.logLastLinesSync(6);
-                        let version_text = last_line.match(/(MC: [0-9]+.[0-9]+.[0-9]+)|(MC: [0-9]+.[0-9]+)/);
-                        if(version_text != null){
-                            resolve(version_text[0]);
-                        }
-                    }, 3000)
-                });
-            });
-        });
-    }
-    getPlayerList(){
-        console.log("Get concurrent online player count...");
-        return new Promise((resolve, reject)=>{
-            this.handler.input('list', ()=>{
-                this.once("logChange", ()=> {
-                    setTimeout(()=>{
-                        const last_line = this.logLastLinesSync(1);
-                        console.log(last_line);
-                        if(last_line.match("(There are [0-9]+ of a max of [0-9]+ players online:)(.)*") !== null){
-                            let player_list = last_line.split('online:')[1].trim().split(', ').filter(e => e != "");
-                            resolve(player_list);
-                        }
-                        else{
-                            reject("List command didn't yield any valuable information");
-                        }
-                        resolve();
-                    }, 30)
+                    }, 2500)
                 });
             });
         });

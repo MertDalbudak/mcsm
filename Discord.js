@@ -10,6 +10,12 @@ let supported_commands = [
         'active': false
     },
     {
+        'name': "server",
+        'description': "Gets server data",
+        'reply': (issuer)=> null,
+        'active': false
+    },
+    {
         'name': "list",
         'description': "Lists the online player count and their names",
         'reply': (issuer)=> null,

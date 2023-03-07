@@ -54,6 +54,7 @@ class Slot{
         }
         const Server = require(`./Server/${server_config.type}`);
         this.Server = new Server(server_id);
+        this.Server.slot = this;
         this.status = "running";
         this.event.emit('serverAssigned', this.Server);
         this.checkDaemon();

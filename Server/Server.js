@@ -55,6 +55,7 @@ class Server {
 
         this.discord.on('ready', ()=>{
             let discord_commands = {
+                'server': this.discordObeyCommandServer,
                 'temp': this.discordObeyCommandTemp,
                 'list': this.discordObeyCommandList,
                 'version': this.discordObeyCommandVersion,
@@ -195,6 +196,22 @@ class Server {
         this.update_cron.start();
     }
 
+    async getCurrentVersion(){
+        const server_data = await this.slot.getServerData();
+        if(server_data != null){
+            return server_data.version.name;
+        }
+        return "Not found";
+    }
+
+    async getPlayerList(){
+        const server_data = await this.slot.getServerData();
+        if(server_data != null){
+            return server_data.players.online > 0 ? server_data.players.sample.map(e => e.name) : [];
+        }
+        return [];
+    }
+
     antiToxicity(){
         this.on("newLogLine", (line)=>{
             if(line.message && line.initiator && line.initiator != "Server"){
@@ -246,7 +263,9 @@ class Server {
             }
         });
     }
-
+    discordObeyCommandServer(){
+        this.discord.obeyCommand('server', () => `You can connect to the server via: ${this.slot.host}`);
+    }
     discordObeyCommandList(){
         this.discord.obeyCommand('list', async ()=>{
             let playerList = await this.getPlayerList();
