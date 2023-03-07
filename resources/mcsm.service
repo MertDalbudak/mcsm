@@ -1,0 +1,8 @@
+[Service]
+Type=simple
+Restart=never
+RestartSec=1
+User=mert
+# EnvironmentFile=/var/Server/mcsm/DaemonEnv
+ExecStart=/bin/bash -c "node /var/Server/mcsm/main.js"
+KillMode=process

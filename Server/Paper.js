@@ -27,8 +27,8 @@ config is expected to look like this:
 
 */
 class Paper extends Server {
-    constructor(config){
-        super(config);
+    constructor(id){
+        super(id);
         this.ServerExecutable ="/paper.jar";
         this.ServerUpdateHost = "papermc.io";
         this.ServerUpdatePath = "/api/v1/paper/1.19.3/latest/download";
@@ -36,7 +36,7 @@ class Paper extends Server {
     newVersionAvailable(){
         console.log("Checking for paper updates...");
         return new Promise((resolve, reject)=>{
-            exec("screen -S minecraft -X stuff 'version\n'", ()=>{
+            this.handler.input('version', ()=>{
                 this.once("logChange", ()=> {
                     setTimeout(()=>{
                         const last_line = this.logLastLinesSync(10);
@@ -50,7 +50,7 @@ class Paper extends Server {
     getCurrentVersion(){
         console.log("Checking for paper updates...");
         return new Promise((resolve, reject)=>{
-            exec("screen -S minecraft -X stuff 'version\n'", ()=>{
+            this.handler.input('version', ()=>{
                 this.once("logChange", ()=> {
                     setTimeout(()=>{
                         const last_line = this.logLastLinesSync(6);
@@ -66,7 +66,7 @@ class Paper extends Server {
     getPlayerList(){
         console.log("Get concurrent online player count...");
         return new Promise((resolve, reject)=>{
-            exec("screen -S minecraft -X stuff 'list\n'", ()=>{
+            this.handler.input('list', ()=>{
                 this.once("logChange", ()=> {
                     setTimeout(()=>{
                         const last_line = this.logLastLinesSync(1);

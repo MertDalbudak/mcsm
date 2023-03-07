@@ -23,11 +23,18 @@ const swear_words_regex = swear_words.join('|');
 
 
 class Server {
+    /**
+     * 
+     * @param {Number} id 
+     */
     constructor(id){
-        Object.assign(this, config.Servers.find(e => e.id == id));
-        if(isNaN(this.id)){
+        this.id = id;
+        this.config = config.Servers.find(e => e.id == this.id);
+        if(this.config == undefined){
             throw new Error(`No server with given id ${id} found.`);
         }
+        this.path = this.config.path;
+        this.logPath = this.config.logPath;
         this.event = new Event();
         this.currentPlayers = [];
         this.maxPlayers = 0;
@@ -35,7 +42,7 @@ class Server {
         this.ServerUpdateHost;
         this.ServerUpdatePath;
 
-        this.bin_path = `/home/pi/src/mcsm/bin/${this.bin}`;
+        this.bin_path = `/home/pi/src/mcsm/bin/${this.config.bin}`;
 
         this.ops_path = this.path + ops_path;
         this.whitelist_path = this.path + whitelist_path;
@@ -45,6 +52,23 @@ class Server {
         
         this.handler = new Handler(this.id);
         this.discord = new Discord(this.id);
+
+        this.discord.on('ready', ()=>{
+            let discord_commands = {
+                'temp': this.discordObeyCommandTemp,
+                'list': this.discordObeyCommandList,
+                'version': this.discordObeyCommandVersion,
+                'banList': this.discordObeyCommandBanlist,
+            };
+            let obeyCommand = this.config.discord.obeyCommand;
+            for(let i = 0; i < obeyCommand.length; i++){
+                discord_commands[obeyCommand[i]].bind(this)();
+            }
+            let eventListener = this.config.discord.eventListener;
+            for(let i = 0; i < eventListener.length; i++){
+                this[eventListener[i]].bind(this)();
+            }
+        });
 
         this.update_permission_requested = false;
         this.init();
@@ -98,7 +122,7 @@ class Server {
 
             // Watch change of banned players
             fs.watch(this.banned_players_path, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, (eventType, filename) => {
-                fs.readFileSync(this.banned_players_path, {'encoding': 'utf-8'}).then((data)=>{
+                fs.readFile(this.banned_players_path, {'encoding': 'utf-8'}).then((data)=>{
                     this.event.emit("bannedPlayersChange", {'current': this.banned_players, 'new': data});
                     this.banned_players = data;
                     this.event.emit("bannedPlayersChanged", filename);
@@ -172,7 +196,7 @@ class Server {
     }
 
     antiToxicity(){
-        this.mc_server.on("newLogLine", (line)=>{
+        this.on("newLogLine", (line)=>{
             if(line.message && line.initiator && line.initiator != "Server"){
                 if(line.message.toLowerCase().match(swear_words_regex)){
                     this.handler.say(`Watch your mouth ${line.initiator}, you filthy bastard.`);
@@ -182,7 +206,7 @@ class Server {
     }
 
     banFlying(){
-        this.mc_server.on("newLogLine", (line)=>{
+        this.on("newLogLine", (line)=>{
             // CHECK IF SOMEONE IS BEEN Kicked for flying
             let check = line.content.match(/(.)* lost connection: Flying is not enabled on this server/);
             if(check != null){
@@ -194,8 +218,8 @@ class Server {
         });
     }
 
-    checkKill(){
-        this.mc_server.on("newLogLine", (line)=>{
+    checkDeath(){
+        this.on("newLogLine", (line)=>{
             // CHECK IF SOMEONE IS DEAD
             let check = null;
             let killed_by = null;
@@ -225,19 +249,19 @@ class Server {
 
     discordObeyCommandList(){
         this.discord.obeyCommand('list', async ()=>{
-            let playerList = await this.mc_server.getPlayerList();
+            let playerList = await this.getPlayerList();
             return `Aktuell ${playerList.length == 1 ? 'ist' : 'sind'} ${playerList.length} Spieler online. ${playerList.length > 0 ? `Online ${playerList.length == 1 ? 'ist' : 'sind'}:\r\n${playerList.join('\r\n')}` : ""}`;
         });
     }
     discordObeyCommandVersion(){
-        this.discord.obeyCommand('version', async ()=> await this.mc_server.getCurrentVersion());
+        this.discord.obeyCommand('version', async ()=> await this.getCurrentVersion());
     }
     discordObeyCommandTemp(){
         this.discord.obeyCommand('temp', () => `Server temperature is currently at: ${this.recent_system_temp}°C`);
     }
     async discordObeyCommandBanlist(){
         const getBanlist = async ()=>{
-            const banned_players = await this.mc_server.getBanlist();
+            const banned_players = await this.getBanlist();
             if(banned_players.length == 0){
                 return `No players are banned currently.`;
             }
@@ -298,26 +322,26 @@ class Server {
         this.ops.forEach(player => {
             this.handler.tellraw(player, "A new version of paper is available, do you want to install the new Version? (Yes, No)", "yellow");
         });
-        console.log(this.mc_server.ServerUpdateHost + this.mc_server.ServerUpdatePath, `.${config.DownloadDir}/paper-${Date.now()}.jar`);
+        console.log(this.ServerUpdateHost + this.ServerUpdatePath, `.${config.DownloadDir}/paper-${Date.now()}.jar`);
         let confirm_update = (line)=>{
             if(this.ops.findIndex(e=> e == line.initiator) != -1){
                 if(this.status != "running")
                     return;
                 if(line.message == 'Yes'){
                     this.status = "updating";
-                    this.mc_server.event.removeListener('newLogLine', confirm_update);
+                    this.event.removeListener('newLogLine', confirm_update);
                     this.handler.tellraw(line.initiator, "Downloading new update...", "green");
                     this.handler.tellraw("@a", "Server will be updated. The server will shutdown in 30 seconds and will come back as soon as the update is completed.", "red");
                     this.handler.stop(30000, 5000, false, false).then(()=> {
                         // DOWNLOAD SERVER FILES
-                        this.download(this.mc_server.ServerUpdateHost + this.mc_server.ServerUpdatePath, "." + config.DownloadDir + "/paper-" + Date.now() + ".jar", (output_file)=>{
+                        this.download(this.ServerUpdateHost + this.ServerUpdatePath, "." + config.DownloadDir + "/paper-" + Date.now() + ".jar", (output_file)=>{
                             this.status = "update installing";
                             this.emit("updateInstalling");
                             // INSTALL PROCESS
                             console.log("Installing new version of minecraft...");
                             //console.log(execSync(`ls -l .${config.DownloadDir}`).toString().trim());
-                            fs.unlinkSync(this.mc_server.path + this.mc_server.ServerExecutable);
-                            fs.renameSync(output_file, this.mc_server.path + this.mc_server.ServerExecutable);
+                            fs.unlinkSync(this.path + this.ServerExecutable);
+                            fs.renameSync(output_file, this.path + this.ServerExecutable);
                             this.status = "update installed";
                             this.handler.emit("updateInstalled");
                             this.startServer();
@@ -329,7 +353,7 @@ class Server {
                 }
             }
         };
-        this.mc_server.on('newLogLine', confirm_update);
+        this.on('newLogLine', confirm_update);
         this.update_permission_requested = true;
     }
 
@@ -349,6 +373,13 @@ class Server {
     }
     once(name, callback){ // THIS IS A SHORTCUT FOR ADDING AN EVENT LISTENER
         this.event.once(name, callback);
+    }
+
+    die(){
+        if(this.discord){
+            this.discord.logout();
+            this.discord = null;
+        }
     }
 
     // GETTER

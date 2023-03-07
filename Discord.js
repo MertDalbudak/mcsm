@@ -127,7 +127,7 @@ module.exports = class{
                                     }
                                 }
                                 catch(error){
-                                    console.error("Couldn't reply to users request", error);
+                                    console.error(error);
                                     await interaction.reply({
                                         'content': "There was an error while executing this command!",
                                         'ephemeral': true
@@ -135,17 +135,29 @@ module.exports = class{
                                 }
                             }
                             else{
-                                await interaction.reply({
-                                    'content': "This command is not supported",
-                                    'ephemeral': true
-                                });
+                                try {
+                                    await interaction.reply({
+                                        'content': "This command is not supported",
+                                        'ephemeral': true
+                                    });
+                                }
+                                catch(error){
+                                    console.error(error);
+                                }
                             }
                         }
                         else{
-                            await interaction.reply({
-                                'content': "The Server that is linked to this channel is not online currently!\nVisit https://mc.dalbudak.de to start your server.",
-                                'ephemeral': true
-                            });
+                            setTimeout(async ()=>{
+                                try{
+                                    await interaction.reply({
+                                        'content': "The Server that is linked to this channel is not online currently!\nVisit https://mc.dalbudak.de to start your server.",
+                                        'ephemeral': true
+                                    });
+                                }
+                                catch(error){
+                                    console.error(error);
+                                }
+                            }, 6000);
                         }
                     }
                 }

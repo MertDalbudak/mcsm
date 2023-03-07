@@ -3,6 +3,7 @@ const {execSync} = require('child_process');
 const Event = require('events');
 const net = require('net');
 const Slot = require('./Slot');
+const WebService = require('./WebService');
 
 
 const config = require('./config.json');
@@ -72,90 +73,11 @@ module.exports = class {
         }, interval_time);
     }
     async webService(){
-        // OPEN SOCKET INTERFACE FOR A WEBSERVICE
-        var server = net.createServer((socket)=> { //'connection' listener
-            console.log('server connected');
-            socket.on('data', async (data)=> {
-                try{
-                    data = JSON.parse(data.toString());
-                }catch(error){
-                    console.error("Request wasn't a valid json");
-                }
-                console.log(data);
-                if(data.authentication){
-                    switch(data.command.name){
-                        case "getTemp":
-                            socket.write(this.mcsw_msg_response(this.recent_system_temp.toString()))
-                            socket.pipe(socket);
-                            break;
-                        case "stopServer":
-                            this.stopServer((error, data)=>{
-                                if(error == null){
-                                    socket.write(this.mcsw_msg_response(data.message));
-                                }
-                                else{
-                                    if(data.command.args.id)
-                                        socket.write(this.mcsw_error_response(error, data.message));
-                                }
-                                socket.pipe(socket);
-                            });
-                            break;
-                        case "startServer":
-                            if(this.suspend_mc_start){
-                                socket.write(this.mcsw_error_response("Starting and restarting are temporarily suspended", false));
-                                socket.pipe(socket);
-                                return;
-                            }
-                            socket.write(this.mcsw_msg_response("Server start has been initialized", true));
-                            socket.pipe(socket, {'end': false});
-                            this.startServer(data.command.args.id, (error, data) => {
-                                if(error == null){
-                                    socket.write(this.mcsw_msg_response(data.message));
-                                }
-                                else{
-                                    socket.write(this.mcsw_error_response(error, data.message));
-                                }
-                                socket.pipe(socket);
-                            });
-                            break;
-                        case "getSlotList":
-                            socket.write(this.mcsw_data_response(await Promise.all(this.Slots.map(async e => await e.report())), "all good"));
-                            socket.pipe(socket);
-                            break;
-                        default:
-                            socket.write("Command not supported");
-                            socket.pipe(socket);
-                    }
-                }
-                else{
-                    socket.write("Authentication failed");
-                    socket.pipe(socket);
-                }
-            });
-            socket.on('end', function() {
-                console.log('server disconnected');
-            });
-        });
-        server.listen(config.MCSM_API_PORT, function() { //'listening' listener
-            console.log(`Socket (${config.MCSM_API_PORT}) is listening`);
-        });
+        this.web_service = new WebService(this, config.MCSM_API_PORT, config.MCSM_API_AUTHENTICATION);
+
+        this.web_service.listen();
     }
     
-    
-    
-
-    mcsw_data_response(data, message, keep_alive = false){
-        return JSON.stringify({'error': null, 'data': data, 'message': message, 'keep_alive': keep_alive});
-    }
-
-    mcsw_error_response(error, message, keep_alive = false){
-        return JSON.stringify({'error': error, 'message': message, 'keep_alive': keep_alive});
-    }
-
-    mcsw_msg_response(message, keep_alive = false){
-        return JSON.stringify({'error': null, 'message': message, 'keep_alive': keep_alive});
-    }
-
     on(name, callback){ // THIS IS A SHORTCUT FOR ADDING AN EVENT LISTENER
         this.event.on(name, callback);
     }

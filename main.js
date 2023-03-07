@@ -1,3 +1,4 @@
+
 //const ServerMonitor = require(__dirname + "/ServerMonitor.js");
 const ServerManager = require(__dirname + "/ServerManager.js");
 const args = process.argv.slice(2);
@@ -15,7 +16,7 @@ function main(){
 	//app.update();
 
 	// MONITOR CPU TEMPERATURE
-	app.temperature(check_interval);
+	// app.temperature(check_interval);
 
 	// MONITOR CPU FREQUENCY
 	//app.frequency(check_interval);
@@ -25,22 +26,8 @@ function main(){
 	// app.restartCron();
 
 	// BAN FLYING PLAYERS
-	
-	//app.banFlying();
-
-	//app.checkKill();
-
-	//app.antiToxicity();
 
 	app.webService();
-
-	/*app.discord.on('ready',()=> {
-		app.discordObeyCommandList()
-		app.discordObeyCommandTemp()
-		app.discordObeyCommandVersion()
-		app.discordObeyCommandBanlist()
-	});
-	*/
 }
 
 app.on('ready', ()=> main());

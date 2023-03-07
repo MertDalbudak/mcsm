@@ -2,7 +2,7 @@ const fs = require('fs').promises;
 const Event = require('events');
 const {exec, spawn} = require('child_process');
 const config = require('./config.json')
-const mcq = require('minecraft-query');
+const util = require('minecraft-server-util');
 
 class Slot{
     constructor(id, server_id){
@@ -13,10 +13,9 @@ class Slot{
         this.event = new Event();
         this.status = "not running";
         this.daemon_status = "not running";
+        this.suspend_mc_start = false;
 
         this.Server = null;
-
-        this.query = new mcq({host: 'localhost', port: this.port});
 
         if(isNaN(server_id) == false){
             this.assignServer(server_id);
@@ -25,24 +24,27 @@ class Slot{
             // CHECK IF AN SERVER IS ALIVE IN SLOT
             this.getServerData().then(async (data) => {
                 console.log(data);
-                const id = await Slot.findIdByMotd(data.motd);
-                if(isNaN(id) == false){
-                    this.assignServer(id);
+                if(data){
+                    const id = await Slot.findIdByMotd(data.motd.clean);
+                    if(isNaN(id) == false){
+                        this.assignServer(id);
+                    }
                 }
             });
         }
     }
 
     async getServerData(){
-        const _promise = new Promise((res) =>{
-            this.query.fullStat().then((data) => {
-                res(data)
-            }, (error)=>{
-                console.log(error);
-            });
-        });
-        const data = await _promise;
-        return data;
+        let data = null;
+        try{
+            data = await util.status('localhost', this.port, {'timeout': 800});
+        }
+        catch(error){
+            console.error(error);
+        }
+        finally{
+            return data;
+        }
     }
 
     assignServer(server_id){
@@ -106,80 +108,90 @@ class Slot{
         });
 
     }
-    startServer(id, callback){
-        if(!isNaN(id)){
-            if(this.status == "restarting" || this.status == "starting"){
-                callback("An start up or restart is already in process.", {})
-                return;
-            }
-            if(this.Server.id != id){
-                //await this.discord.send(`The Minecraft server thats linked to this channel will be stopped`);
-            }
-            setServerId.bind(this)(id);
-            const spawn_options = {
-                slient: true,
-                detached: true,
-                stdio: 'ignore',
-                shell: false,
-                windowsHide: true
-            }
-            if(this.daemon_status == "running"){
-                this.handler.say("Server will stop");
-                this.status = "restarting";
-                this.suspendMcStart();
-                this.stopServer((error)=>{
-                    if(error == null){
-                        this.once('restartClosed', ()=>{
-                            try{
-                                const mc_server_spawn = spawn('bash', [this.Server.bin, ...this.Server.binOptions], spawn_options);
-                                mc_server_spawn.unref();
-                                this.discord.on('ready', ()=>{
-                                    this.discord.send(`The Minecraft server thats linked to this channel has started. You might be able to join the server in a minute.`);
-                                });
-                                callback(null, {'message': "Server has been started."});
-                            }
-                            catch(error){
-                                callback("Current server have been stopped but something went wrong starting the desired server", {'message': error})
-                                console.log(error);
-                            }
-                        });
-                    }
-                    else{
-                        this.discord.send(`An error occured trying to stop the current server`);
-                    }
-                })
-            }
-            else{
-                if(this.status == "not running"){
-                    this.status = "starting";
-                    this.suspendMcStart();
-                    try{
-                        const mc_server_spawn = spawn('bash', [this.Server.bin, ...this.Server.binOptions], spawn_options);
-                        mc_server_spawn.unref();
-                        this.discord.on('ready', ()=>{
-                            this.discord.send(`The Minecraft server thats linked to this channel has started. You might be able to join the server in a minute.`);
-                        });
-                        callback(null, {'message': "Server has been started."});
-                    }
-                    catch(error){
-                        callback("An error occured starting the server.", {'message': error})
-                        console.log(error);
-                    }
-                }
-                else{
-                    callback("Another process is currently running please check again later", {})
-                }
-            }
-        }
+    async startServer(id, callback){
 
-        this.checkDaemon();
+        if(this.status == "restart" || this.status == "restarting" || this.status == "starting"){
+            callback("An start up or restart is already in process.", {})
+            return;
+        }
+        const spawn_options = {
+            slient: true,
+            detached: true,
+            stdio: 'ignore',
+            shell: false,
+            windowsHide: true
+        }
+        if(this.Server != null){
+            this.status = "restart";
+            this.event.emit('restart');
+            try{
+                await (new Promise((resolve, reject)=>{
+                    this.stopServer((error, data)=>{
+                        if(this.Server.discord){
+                            this.Server.discord.send(`The Minecraft server thats linked to this channel stopped`);
+                        }
+                        if(error){
+                            reject([error, data]);
+                        }
+                        else{
+                            resolve();
+                        }
+                    });
+                }));
+            }
+            catch(error){
+                callback(...error);
+                console.error(error);
+            }
+            this.Server = null;
+        }
+        try{
+            switch(this.status){
+                case "restarting":
+                    this.event.emit("restarted");
+                    break;
+                case "not running":
+                default:
+                    this.event.emit("started");
+                    break;
+            }
+            this.suspendServerStart();
+            this.assignServer(id);
+            const mc_server_spawn = spawn('bash', [this.Server.config.bin, ...this.Server.config.binOptions], spawn_options);
+            mc_server_spawn.unref();
+            this.Server.discord.on('ready', ()=>{
+                this.Server.discord.send(`The Minecraft server thats linked to this channel has started. You might be able to join the server in a minute.`);
+            });
+            
+            callback(null, {'message': "Server has been started."});
+        }
+        catch(error){
+            callback("Current server have been stopped but something went wrong starting the desired server", {'message': error})
+            console.log(error);
+        }
     }
 
     stopServer(callback){
         this.Server.handler.say("Server will stop");
         this.Server.handler.stop(0, false, false, false).then(()=>{
-            if(this.discord){
-                this.discord.send(`The Minecraft server thats linked to this channel will be stopped`);
+            if(this.Server.discord){
+                this.Server.discord.send(`The Minecraft server thats linked to this channel will be stopped`).then(()=>{
+                    this.Server.die();
+                    this.Server = null;
+                });
+            }
+            else{
+                this.Server = null;
+            }
+            switch(this.status){
+                case "restart":
+                    this.status = "restarting";
+                    this.event.emit("restarting");
+                    break;
+                case "running":
+                default:
+                    this.status = "not running";
+                    break;
             }
             callback(null, {'message': "Server has been stopped"});
         }, (error)=>{
@@ -210,20 +222,20 @@ class Slot{
     get daemon_status (){
         return daemon_status;
     }
-    get suspend_server_start(){
-        return suspend_mc_start;
-    }
     async report(){
         let server = null;
         if(this.Server){
             server = await this.getServerData();
-            server.id = this.Server.id;
+            if(server != null){
+                server.id = this.Server.id;
+            }
         }
         return {
             'id': this.id,
             'host': this.host,
             'port': this.port,
             'srvRecord': this.srvRecord,
+            'available_server': Slot.available_server,
             'status': this.status,
             'server':  server
         }
@@ -256,6 +268,8 @@ Slot.findIdByMotd = async function(motd){
         return null;
     }
 }
+
+Slot.available_server = config.Servers.map(e => ({'id': e.id}));
 
 // PRIVATE VAR
 let daemon_status = "";

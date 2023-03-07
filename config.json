@@ -1,29 +1,24 @@
 {
-    "ComputerName": "Raspberry",
-    "CPUArchitecture": "arm64",
+    "ComputerName": "HP",
+    "CPUArchitecture": "amd64",
     "CPUFrequency": "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq",
     "CPUTemperature": "/sys/class/thermal/thermal_zone0/temp",
     "Discord": {
         "commandPrefix": "/",
         "commandRegisterInterval": 30000,
-        "deathMessage": "{{dying_player}} geberdi, hahahaha!",
-        "killMessage": "{{killed_by}} {{dying_player}}'in amini götünü dagitti"
+        "deathMessage": "{{dying_player}} died, hahahaha!",
+        "killMessage": "{{killed_by}} has slaughtered {{dying_player}}"
     },
     "DownloadDir": "/download",
-    "ModelName": "Raspberry Pi 4B",
+    "ModelName": "Dedicated MC-Server",
     "MCSM_API_PORT": 8124,
+    "MCSM_API_AUTHENTICATION": "sha-1",
     "Slots": [
         {
             "id": 1,
             "host": "mc.dalbudak.de",
             "port": 25565,
             "srvRecord": false
-        },
-        {
-            "id": 2,
-            "host": "mc2.dalbudak.de",
-            "port": 25566,
-            "srvRecord": true
         }
     ],
     "Servers": [
@@ -33,42 +28,25 @@
             "binOptions": [
                 "-n"
             ],
-            "path": "/home/pi/paper",
+            "path": "/var/Server/paper",
             "logPath": "/logs/latest.log",
             "owner": "Mert Dalbudak",
             "type": "Paper",
             "version": "^1.19.3",
             "discord": {
-                "token": "MTA1MDkyMjE4MjQ4MzY1Njc4NA.Gk7Z1E.2_w5LTLpoRe4xKuEl3Oath5LEG8ZukhGazfC70",
-                "clientId": "1050922182483656784",
+                "token": "DISCORD-TOKEN",
+                "clientId": "DISCORD-CLIENT-ID",
                 "channels":[
                     {
-                        "id": "1050922361907597364",
+                        "id": "DISCORD-CHANNEL-ID",
                         "name": "minecraft-activities"
                     }
-                ]
-            },
-            "ServerLogCheckInterval": 20
-        },
-        {
-            "id": 2,
-            "bin": "paper2",
-            "binOptions": [
-                "-n"
-            ],
-            "path": "/home/pi/paper2",
-            "logPath": "/logs/latest.log",
-            "owner": "Mert Dalbudak",
-            "type": "Paper",
-            "version": "^1.19.3",
-            "discord": {
-                "token": "MTA1MDkyMjE4MjQ4MzY1Njc4NA.Gk7Z1E.2_w5LTLpoRe4xKuEl3Oath5LEG8ZukhGazfC70",
-                "clientId": "1050922182483656784",
-                "channels":[
-                    {
-                        "id": "1057462190094950590",
-                        "name": "minecraft-activities"
-                    }
+                ],
+                "obeyCommand": [
+                    "list", "version", "banList"
+                ],
+                "eventListener": [
+                    "banFlying", "checkDeath", "antiToxicity"
                 ]
             },
             "ServerLogCheckInterval": 20

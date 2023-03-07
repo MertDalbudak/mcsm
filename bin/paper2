@@ -1,6 +1,8 @@
 #!/bin/bash
 
 SKIP_MONIT=0;
+SERVER_ID=$(basename $BASH_SOURCE);
+SERVER_PATH="/var/Server/paper2/"
 
 while getopts ":h:n" option; do
    case $option in
@@ -14,14 +16,16 @@ while getopts ":h:n" option; do
    esac
 done
 
-if ! screen -list | grep -q "paper2"; then
+if ! screen -list | grep -q "$SERVER_ID"; then
     echo "starting minecraft server";
-    screen -dmS paper2 bash -c 'cd /home/pi/paper2/ && java -Xms1G -Xmx3G -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M -XX:G1ReservePercent=20 -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1 -jar paper.jar nogui'
+    screen -dmS $SERVER_ID bash -c 'cd /var/Server/paper2/ && java -Xms1G -Xmx3G -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch -XX:G1NewSizePercent=30 -XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M -XX:G1ReservePercent=20 -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 -XX:InitiatingHeapOccupancyPercent=15 -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1RSetUpdatingPauseTimePercent=5 -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1 -jar paper.jar nogui'
+    screen -S $SERVER_ID -X multiuser on
+    screen -S $SERVER_ID -X acladd root
     echo "successful";
     if [ $SKIP_MONIT -eq 0 ]; then
         read -p "Minecraft server is now starting, do you want to start the server monitor? (Y, n) " -n 1 -r -e yn
         case "${yn:-Y}" in
-            [Yy]* ) echo "SERVER_ID=1" > ~/src/mcsm/DaemonEnv; sudo systemctl start mcsm; echo "Server monitoring enabled";;
+            [Yy]* ) sudo systemctl start mcsm; echo "Server monitoring enabled";;
                 * ) echo "Server monitoring not activ";;
         esac
     fi
