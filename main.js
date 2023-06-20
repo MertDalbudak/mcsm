@@ -1,4 +1,4 @@
-
+process.env.ROOT = __dirname;
 //const ServerMonitor = require(__dirname + "/ServerMonitor.js");
 const ServerManager = require(__dirname + "/ServerManager.js");
 const args = process.argv.slice(2);

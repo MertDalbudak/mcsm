@@ -1,6 +1,0 @@
-#!/bin/bash
-
-screen -S mert/paper2 -X stuff 'say Server is stopping\n'; 
-screen -S mert/paper2 -X stuff 'stop\n';
-
-echo "Stopped";

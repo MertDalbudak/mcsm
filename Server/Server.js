@@ -42,7 +42,7 @@ class Server {
         this.ServerUpdateHost;
         this.ServerUpdatePath;
 
-        this.bin_path = `/home/pi/src/mcsm/bin/${this.config.bin}`;
+        this.bin_path = `${process.env.ROOT}/bin/${this.config.bin}`;
 
         this.ops_path = this.path + ops_path;
         this.whitelist_path = this.path + whitelist_path;
@@ -385,6 +385,27 @@ class Server {
         });
         request.on('finish', ()=> callback(output_file));
         request.on('error', (e) => console.error(e));
+    }
+    /**
+     * 
+     * @param {Number} port 
+     * @returns {boolean}
+     */
+    async setPort(port){
+        try{
+            let server_properties = await fs.readFile(`${this.path}/server.properties`, {'encoding': 'utf8'});
+            // REPLACE OLD PORT
+            server_properties = server_properties.replace(/query\.port=[0-9]+/, `query.port=${port}`);
+            server_properties = server_properties.replace(/server-port=[0-9]+/, `server-port=${port}`);
+            await fs.writeFile(`${this.path}/server.properties`, server_properties, {'encoding': 'utf8'});
+        }
+        catch(error){
+            console.error(error);
+            return false;
+        }
+        finally{
+            return true;
+        }
     }
 
     on(name, callback){ // THIS IS A SHORTCUT FOR ADDING AN EVENT LISTENER

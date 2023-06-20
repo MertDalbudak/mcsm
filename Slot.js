@@ -47,7 +47,7 @@ class Slot{
         }
     }
 
-    assignServer(server_id){
+    async assignServer(server_id){
         const server_config = config.Servers.find(e => e.id == server_id);
         if(server_config == undefined){
             throw new Error(`No server with given id ${id} found.`);
@@ -55,6 +55,7 @@ class Slot{
         const Server = require(`./Server/${server_config.type}`);
         this.Server = new Server(server_id);
         this.Server.slot = this;
+        await this.Server.setPort(this.port)
         this.status = "running";
         this.event.emit('serverAssigned', this.Server);
         this.checkDaemon();
@@ -110,7 +111,6 @@ class Slot{
 
     }
     async startServer(id, callback){
-
         if(this.status == "restart" || this.status == "restarting" || this.status == "starting"){
             callback("An start up or restart is already in process.", {})
             return;
@@ -147,6 +147,7 @@ class Slot{
             this.Server = null;
         }
         try{
+            // SET NEW STATUS
             switch(this.status){
                 case "restarting":
                     this.event.emit("restarted");
@@ -156,9 +157,11 @@ class Slot{
                     this.event.emit("started");
                     break;
             }
-            this.suspendServerStart();
-            this.assignServer(id);
-            const mc_server_spawn = spawn('bash', [this.Server.config.bin, ...this.Server.config.binOptions], spawn_options);
+            this.suspendServerStart();  // SUSPEND SLOT SERVER START
+            await this.assignServer(id);    // ASSIGN SERVER TO THIS SLOT
+            // TRY STARTING THE SERVER
+            console.log(this.Server.bin_path);
+            const mc_server_spawn = spawn('bash', [this.Server.bin_path, ...this.Server.config.binOptions], spawn_options);
             mc_server_spawn.unref();
             this.Server.discord.on('ready', ()=>{
                 this.Server.discord.send(`The Minecraft server thats linked to this channel has started. You might be able to join the server in a minute.`);

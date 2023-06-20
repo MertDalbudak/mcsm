@@ -1,0 +1,6 @@
+#!/bin/bash
+
+screen -S mert/minecraft2 -X stuff 'say Server is stopping\n'; 
+screen -S mert/minecraft2 -X stuff 'stop\n';
+
+echo "Stopped";

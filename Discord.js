@@ -156,14 +156,14 @@ module.exports = class{
                             setTimeout(async ()=>{
                                 try{
                                     await interaction.reply({
-                                        'content': "The Server that is linked to this channel is not online currently!\nVisit https://mc.dalbudak.de to start your server.",
+                                        'content': "There is no server linked to this channel currently!\nVisit https://mc.dalbudak.de to start your server.",
                                         'ephemeral': true
                                     });
                                 }
                                 catch(error){
                                     console.error(error);
                                 }
-                            }, 6000);
+                            }, this.config.no_service_timeout);
                         }
                     }
                 }
