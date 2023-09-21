@@ -14,22 +14,17 @@
     "ModelName": "Dedicated MC-Server",
     "MCSM_API_PORT": 8124,
     "MCSM_API_AUTHENTICATION": "sha-1",
-    "Slots": [
-        {
-            "id": 1,
-            "host": "mc.dalbudak.de",
-            "port": 25565,
-            "srvRecord": false
-        }
-    ],
+    "Slot": {
+        "id": 1,
+        "host": "mc.dalbudak.de",
+        "port": 25565,
+        "srvRecord": false
+    },
     "Servers": [
         {
             "id": 1,
-            "bin": "minecraft2",
-            "binOptions": [
-                "-n"
-            ],
-            "path": "/var/Server/paper",
+            "path": "/var/server/paper",
+            "backupPath": "/var/server/backup",
             "logPath": "/logs/latest.log",
             "owner": "Mert Dalbudak",
             "server": "Java",

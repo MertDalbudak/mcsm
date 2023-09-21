@@ -20,7 +20,7 @@ module.exports = class {
         this.recent_system_temp = 0.00;
         this.recent_system_freq = 0;
         this.event = new Event();
-        this.Slots = config.Slots.map(slot => new Slot(slot.id));
+        this.slot = new Slot(config.Slot.id);
         setTimeout(()=>this.event.emit('ready'), 100);
     }
     
@@ -31,24 +31,22 @@ module.exports = class {
                 if(err == null){
                     const temp = (data/1000).toFixed(2);
                     this.recent_system_temp = temp;
-                    this.active_slots.forEach(slot => {
-                        if(isNaN(this.shutdown_temp_threshold) == false && temp < this.shutdown_temp_threshold){
-                            slot.Server.abortShutdown();
-                        }
-                        for(let i = 0; i < this.temp_policy.length; i++){
-                            if(temp <= this.temp_policy[i]['max_temp']){
-                                this.shutdown_temp_threshold = i > 0 ? 0 : this.temp_policy[i - 1]['max_temp'];
-                                let actions = this.temp_policy[i]["action"](temp);
-                                for(let action in actions){
-                                    if(Array.isArray(actions[action]))
-                                        slot.Server.handler[action](...actions[action]);
-                                    else
-                                        slot.Server.handler[action](actions[action]);
-                                }
-                                break;
+                    if(isNaN(this.shutdown_temp_threshold) == false && temp < this.shutdown_temp_threshold){
+                        this.slot.Server.abortShutdown();
+                    }
+                    for(let i = 0; i < this.temp_policy.length; i++){
+                        if(temp <= this.temp_policy[i]['max_temp']){
+                            this.shutdown_temp_threshold = i > 0 ? 0 : this.temp_policy[i - 1]['max_temp'];
+                            let actions = this.temp_policy[i]["action"](temp);
+                            for(let action in actions){
+                                if(Array.isArray(actions[action]))
+                                    this.slot.Server.handler[action](...actions[action]);
+                                else
+                                    this.slot.Server.handler[action](actions[action]);
                             }
+                            break;
                         }
-                    });
+                    }
                 }
                 else{
                     console.error(err);
@@ -91,8 +89,5 @@ module.exports = class {
     }
     get node_version() {
         return execSync("node --version").toString().trim();
-    }
-    get active_slots(){
-        return this.Slots.filter(slot => (slot.status == 'running'));
     }
 };

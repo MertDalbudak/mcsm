@@ -6,7 +6,7 @@ const util = require('minecraft-server-util');
 
 class Slot{
     constructor(id, server_id){
-        Object.assign(this, config.Slots.find(slot => slot.id == id));
+        Object.assign(this, config.Slot);
         if(isNaN(this.id)){
             throw new Error(`No server with given id ${id} found.`);
         }
@@ -160,8 +160,7 @@ class Slot{
             this.suspendServerStart();  // SUSPEND SLOT SERVER START
             await this.assignServer(id);    // ASSIGN SERVER TO THIS SLOT
             // TRY STARTING THE SERVER
-            console.log(this.Server.bin_path);
-            const mc_server_spawn = spawn('bash', [this.Server.bin_path, ...this.Server.config.binOptions], spawn_options);
+            const mc_server_spawn = spawn('bash', [`${process.env.ROOT}/bin/start`, `-p ${this.Server.config.path}`], spawn_options);
             mc_server_spawn.unref();
             this.Server.discord.on('ready', ()=>{
                 this.Server.discord.send(`The Minecraft server thats linked to this channel has started. You might be able to join the server in a minute.`);

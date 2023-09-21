@@ -37,9 +37,9 @@ class WebService {
         });
     }
 
-    listen(){
-        this.server.listen(this.port, ()=>{ //'listening' listener
-            console.log(`Socket (${this.port}) is listening`);
+    listen(port = this.port){
+        this.server.listen(port, ()=>{ //'listening' listener
+            console.log(`Socket (${port}) is listening`);
         });
     }
 
@@ -49,7 +49,7 @@ class WebService {
     }
     async stopServer(socket, data){
         console.log(data);
-        const slot = this.manager.Slots.find(slot => slot.id == data.slot_id);
+        const slot = this.manager.slot;
         if(slot){
             slot.stopServer((error, data)=>{
                 if(error == null){
@@ -69,7 +69,7 @@ class WebService {
     }
     async startServer(socket, data){
         console.log(data);
-        const slot = this.manager.Slots.find(slot => slot.id == data.slot_id);
+        const slot = this.manager.slot;
         if(slot){
             if(slot.suspend_mc_start){
                 socket.write(WebService.error_response("Starting and restarting are temporarily suspended", false));
@@ -93,8 +93,8 @@ class WebService {
             WebService.send(socket);
         }
     }
-    async getSlotList(socket, data){
-        socket.write(WebService.data_response(await Promise.all(this.manager.Slots.map(async e => await e.report()))));
+    async getSlotData(socket, data){
+        socket.write(WebService.data_response(await this.manager.slot.report()));
         WebService.send(socket);
     }
     async notSupported(socket, data){
