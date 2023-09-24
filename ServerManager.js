@@ -38,7 +38,7 @@ module.exports = class {
                     const temp = (data/1000).toFixed(2);
                     this.recent_system_temp = temp;
                     if(isNaN(this.shutdown_temp_threshold) == false && temp < this.shutdown_temp_threshold){
-                        this.slot.Server.abortShutdown();
+                        this.slot.server.abortShutdown();
                     }
                     for(let i = 0; i < this.temp_policy.length; i++){
                         if(temp <= this.temp_policy[i]['max_temp']){
@@ -46,9 +46,9 @@ module.exports = class {
                             let actions = this.temp_policy[i]["action"](temp);
                             for(let action in actions){
                                 if(Array.isArray(actions[action]))
-                                    this.slot.Server.handler[action](...actions[action]);
+                                    this.slot.server.handler[action](...actions[action]);
                                 else
-                                    this.slot.Server.handler[action](actions[action]);
+                                    this.slot.server.handler[action](actions[action]);
                             }
                             break;
                         }

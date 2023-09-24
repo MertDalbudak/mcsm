@@ -36,7 +36,9 @@ else
 
     n stable
 
-    npm install -g npm@latest
+    npm cache clean -f
+
+    npm i -g npm
 
     # RESTART SHELL
 
@@ -55,9 +57,9 @@ else
     echo "User exists"
 fi
 
-chmod -R 770 $PARENT_DIRECTORY
+chown -R mcsm:mcsm ../*
+chmod -R 777 $PARENT_DIRECTORY
 chmod +x $CURR_DIRECTORY/*
-chown mcsm:mcsm ../*
 
 # SETTING UP MCSM SERVICE
 
