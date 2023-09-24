@@ -1,0 +1,79 @@
+#!/bin/bash
+
+echo "INSTALLING MCSM ENVIRONMENT";
+
+sleep 5;
+
+## CHECK IF JAVA IS INSTALLED
+
+if java -version 2>&1 >/dev/null | grep -q "java version" ; then
+    echo "Java runtime environment installed";
+else
+    echo "Java runtime environment not found. Installing...";
+    # CHANGE PACKAGE MANAGER FOR YOUR MACHINE
+    apt update
+    apt install openjdk-19-jre-headless zip -y
+fi
+
+## CHECK IF NODE.JS IS INSTALLED
+
+if node --version 2>&1 >/dev/null | grep -q "v" ; then
+    echo "Node.js installed";
+else
+    echo "Node.js not found. Installing...";
+    # CHANGE PACKAGE MANAGER FOR YOUR MACHINE
+
+    apt install npm -y
+
+    npm i -g npm
+
+    npm i -g n
+
+    n stable
+
+    # RESTART SHELL
+
+    echo "Nodejs installed correctly"
+
+fi
+
+npm i --prefix ../
+
+## CHECK USER EXISTS OTHERWISE ADD USER
+MCSM_USER="mcsm";
+if ! id -u "$MCSM_USER" >/dev/null 2>&1; then
+    echo "User does not exists. Creating a new user...";
+    useradd -c "User account for mcsm service" -m -d /var/server/mcsm -G sudo mcsm;
+else
+    echo "User exists"
+fi
+
+chmod mcsm:mcsm ../*
+
+# SETTING UP MCSM SERVICE
+
+SERVICE_FILE=/etc/systemd/system/mcsm.service
+CURR_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+PARENT_DIRECTORY=$(dirname -- "$CURR_DIRECTORY")
+
+if [ ! -f "$SERVICE_FILE" ]; then
+    echo "[Service]
+Type=simple
+Restart=never
+RestartSec=1
+User=mcsm
+ExecStart=/bin/bash -c "node $PARENT_DIRECTORY/main.js"
+KillMode=process
+" >> $SERVICE_FILE;
+fi
+
+
+## config.js
+VALID_CONFIG=$(/usr/local/bin/node ./setup_config.js);
+
+
+echo "Setup complete"
+
+sleep 3;
+
+exec "$SHELL"

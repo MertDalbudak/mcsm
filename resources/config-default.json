@@ -1,0 +1,30 @@
+{
+    "ComputerName": "HP",
+    "CPUArchitecture": "amd64",
+    "CPUFrequency": "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq",
+    "CPUTemperature": "/sys/class/thermal/thermal_zone2/temp",
+    "Discord": {
+        "noServiceTimeout": 2775,
+        "commandRegisterInterval": 30000
+    },
+    "BackupPath": "/backup",
+    "DownloadPath": "/download",
+    "MCSM_API_PORT": 8124,
+    "MCSM_API_AUTHENTICATION": "sha-1",
+    "Slot": {
+        "id": 1,
+        "host": "mc.dalbudak.de",
+        "port": 25565,
+        "srvRecord": false
+    },
+    "Server":{
+        "path": [
+            "/mnt/servers/minecraft"
+        ],
+        "logCheckInterval": 20,
+        "restartInterval": "0 */4 * * *",
+        "checkUpdateInterval": "0 */12 * * *"
+    },
+    "Version": 1.0,
+    "WebAPI": true
+}

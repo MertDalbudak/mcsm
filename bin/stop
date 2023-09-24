@@ -1,6 +1,6 @@
 #!/bin/bash
 
-$SCREEN_NAME="mc-server"
+SCREEN_NAME="mc-server"
 
 if screen -list | grep -q $SCREEN_NAME; then
     screen -S $SCREEN_NAME -X stuff 'say Server is stopping in 3 seconds\n';

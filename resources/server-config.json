@@ -1,0 +1,26 @@
+{
+    "id": 1,
+    "name": "Server name",
+    "logPath": "/logs/latest.log",
+    "type": "Paper",
+    "version": "^1.19.3",
+    "discord": {
+        "token": "MTA1MDkyMjE4MjQ4MzY1Njc4NA.Gv8Yws.JCMkZBJ8eqwgstJlPb-0BhlpR2soHhPwneq0VQ",
+        "clientId": "1050922182483656784",
+        "channels":[
+            {
+                "id": "1057462190094950590",
+                "name": "minecraft-activities"
+            }
+        ],
+        "obeyCommand": [
+            "server", "list", "version", "banList"
+        ],
+        "eventListener": [
+            "banFlying", "checkDeath", "antiToxicity"
+        ],
+        "commandPrefix": "/",
+        "deathMessage": "{{dying_player}} died, hahahaha!",
+        "killMessage": "{{dying_player}} was killed by {{killed_by}}"
+    }
+}

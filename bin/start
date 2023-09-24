@@ -1,8 +1,9 @@
 #!/bin/bash
 
-$SCREEN_NAME="mc-server"
+SCREEN_NAME="mc-server"
 
-while getopts h:p:l: flag do
+while getopts h:p:l: flag 
+do
     case "${flag}" in
         h) # display Help
             echo "Use -p to define the path of the server";

@@ -3,29 +3,6 @@ const fs = require('fs/promises')
 const Server = require('./Server');
 
 
-/*
-config is expected to look like this:
-{
-    "id": 0,
-    "bin": "minecraft2 -n",
-    "path": "/location/of/server",
-    "logPath": "/logs/latest.log",
-    "owner": "John Doe",
-    "type": "Paper",
-    "version": "1.19.3",
-    "discord": {
-        "token": "[DISCORD_TOKEN]",
-        "channels":[
-            {
-                "id": "[DISCORD_CHANNEL_ID]",
-                "name": "minecraft-activities"
-            }
-        ]
-    },
-    "ServerLogCheckInterval": 20
-}
-
-*/
 class Paper extends Server {
     constructor(id){
         super(id);

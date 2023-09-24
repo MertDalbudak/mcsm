@@ -1,0 +1,6 @@
+# Installation
+
+Run the `bin/setup` script in your Debian based environment and follow the instructions.
+After the setup is complete you can start your mcsm server with the following command
+
+`systemctl start mcsm.service`

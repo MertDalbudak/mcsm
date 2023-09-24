@@ -5,7 +5,7 @@ const Event = require('events');
 const {get} = require('https');
 const {exec, execSync} = require('child_process');
 const CronJob = require('cron').CronJob;
-const config = require('../config.json');
+const config = require('../config.json').Server;
 
 const Handler = require('../Handler.js');
 const Discord = require('../Discord.js');
@@ -18,8 +18,8 @@ const banned_players_path = "/banned-players.json";
 
 // LOAD RESOURCES
 const death_messages = require('../resources/death_messages.json');
-const swear_words = require('../resources/swear-words.json');
-const swear_words_regex = swear_words.join('|');
+const blacklist_words = require('../resources/blackilist-words.json');
+const blacklist_words_regex = blacklist_words.join('|');
 
 
 class Server {
@@ -29,21 +29,19 @@ class Server {
      */
     constructor(id){
         this.id = id;
-        this.config = config.Servers.find(e => e.id == this.id);
+        this.config = Server.available_servers.find(e => e.id == this.id);
         if(this.config == undefined){
             throw new Error(`No server with given id ${id} found.`);
         }
-        this.path = this.config.path;
-        this.logPath = this.config.logPath;
+        
         this.event = new Event();
-        this.currentPlayers = [];
-        this.maxPlayers = 0;
+
         this.ServerExecutable;
         this.ServerUpdateHost;
         this.ServerUpdatePath;
 
-        this.bin_path = `${process.env.ROOT}/bin/${this.config.bin}`;
-
+        this.path = this.config.path;
+        this.logPath = this.path + this.config.logPath;
         this.ops_path = this.path + ops_path;
         this.whitelist_path = this.path + whitelist_path;
         this.banned_ips_path = this.path + banned_ips_path;
@@ -215,7 +213,7 @@ class Server {
     antiToxicity(){
         this.on("newLogLine", (line)=>{
             if(line.message && line.initiator && line.initiator != "Server"){
-                if(line.message.toLowerCase().match(swear_words_regex)){
+                if(line.message.toLowerCase().match(blacklist_words_regex)){
                     this.handler.say(`Watch your mouth ${line.initiator}, you filthy bastard.`);
                 }
             }
@@ -377,15 +375,39 @@ class Server {
     }
 
     download(url, output_file, callback){
-        const download = fs.createWriteStream(output_file);
+        const download_file = fs.createWriteStream(output_file);
         console.log("downloading");
-        const request = get("https://" + url, function(response) {
-            response.pipe(download);
-            response.on('error', (e) => console.error(e));
+        get(url, function(response) {
+            response.pipe(download_file);
+            download_file.on('finish', function() {
+                console.log("DOWNLOADING COMPLETE");
+                download_file.close(() => callback());  // close() is async, call cb after close completes.
+            });
+        }).on('error', function(err) { // Handle errors
+            fs.unlink(DOWNLOAD_PAPER_JAR); // Delete the file async. (But we don't check the result)
+            if (callback)
+                callback(err.message);
         });
-        request.on('finish', ()=> callback(output_file));
-        request.on('error', (e) => console.error(e));
     }
+
+    backupServer(callback){
+        // CREATE BACKUP
+        let backup_path, counter = 0;
+        do{
+            let filename_suffix = counter > 0 ? `(${counter})` : "";
+            backup_path = `backups/paper-backup${filename_suffix}.zip`;
+            counter++;
+        }while(fs.existsSync(backup_path));
+    
+        exec(`zip -9 -r '${backup_path}' server`, (error, stdout, stderr) => {
+            if(error != null && stderr != null){
+                throw new Error(error);
+            }
+            callback();
+        });
+    }
+
+
     /**
      * 
      * @param {Number} port 
@@ -393,11 +415,9 @@ class Server {
      */
     async setPort(port){
         try{
-            let server_properties = await fs.readFile(`${this.path}/server.properties`, {'encoding': 'utf8'});
-            // REPLACE OLD PORT
-            server_properties = server_properties.replace(/query\.port=[0-9]+/, `query.port=${port}`);
-            server_properties = server_properties.replace(/server-port=[0-9]+/, `server-port=${port}`);
-            await fs.writeFile(`${this.path}/server.properties`, server_properties, {'encoding': 'utf8'});
+            this.properties = this.properties.replace(/query\.port=[0-9]+/, `query.port=${port}`);
+            this.properties = this.properties.replace(/server-port=[0-9]+/, `server-port=${port}`);
+            await fs.writeFile(`${this.path}/server.properties`, this.properties, {'encoding': 'utf8'});
         }
         catch(error){
             console.error(error);
@@ -427,5 +447,51 @@ class Server {
         return this.currentPlayerCount.length();
     }
 }
+
+Server.getAvailableServers = async () =>{
+    let server_list = [];
+    for(let i = 0; i < config.path.length; i++){
+        let path = config.path[i];
+        try{
+            let dir_list = await fs.readdir(path, { withFileTypes: true });
+            for(let j = 0; j < dir_list.length; j++){
+                if(!dir_list[j].isDirectory()){
+                    return;
+                }
+                let server_dirname = dir_list[j].name;
+                let server_data = await fs.readFile(`${path}/${server_dirname}/plugins/mcsm/config.json`, {encoding: 'utf-8'});
+                server_data.properties = fs.readFile(`${path}/${server_dirname}/server.properties`, {encoding: 'utf-8'});
+                server_data.path = `${path}/${server_dirname}`;
+                server_list.push(server_data);
+            }
+        }catch(error){
+            console.log(error);
+        }
+    }
+    return server_list;
+}
+
+Server.findIdByMotd = async function(motd){
+    motd = motd.trim();
+    try{
+        for(let i = 0; i < Server.available_servers.length; i++){
+            let server = Server.available_servers[i];
+
+            let server_motd = server.properties.match(/motd=(.)+/g)
+            if(server_motd != null){
+                server_motd = server_motd[0].split('=')[1].trim();
+                if(server_motd == motd){
+                    return server.id;
+                }
+            }
+        }
+    }
+    catch(error){
+        console.error(error);
+        return null;
+    }
+}
+
+Server.available_servers = await Server.getAvailableServers();
 
 module.exports = Server;
