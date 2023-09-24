@@ -18,7 +18,7 @@ const banned_players_path = "/banned-players.json";
 
 // LOAD RESOURCES
 const death_messages = require('../resources/death_messages.json');
-const blacklist_words = require('../resources/blackilist-words.json');
+const blacklist_words = require('../resources/blacklist-words.json');
 const blacklist_words_regex = blacklist_words.join('|');
 
 
@@ -29,48 +29,55 @@ class Server {
      */
     constructor(id){
         this.id = id;
-        this.config = Server.available_servers.find(e => e.id == this.id);
-        if(this.config == undefined){
-            throw new Error(`No server with given id ${id} found.`);
-        }
-        
+
         this.event = new Event();
 
         this.ServerExecutable;
         this.ServerUpdateHost;
         this.ServerUpdatePath;
 
-        this.path = this.config.path;
-        this.logPath = this.path + this.config.logPath;
-        this.ops_path = this.path + ops_path;
-        this.whitelist_path = this.path + whitelist_path;
-        this.banned_ips_path = this.path + banned_ips_path;
-        this.banned_players_path = this.path + banned_players_path;
-
-        
-        this.handler = new Handler(this.id);
-        this.discord = new Discord(this.id);
-
-        this.discord.on('ready', ()=>{
-            let discord_commands = {
-                'server': this.discordObeyCommandServer,
-                'temp': this.discordObeyCommandTemp,
-                'list': this.discordObeyCommandList,
-                'version': this.discordObeyCommandVersion,
-                'banList': this.discordObeyCommandBanlist,
-            };
-            let obeyCommand = this.config.discord.obeyCommand;
-            for(let i = 0; i < obeyCommand.length; i++){
-                discord_commands[obeyCommand[i]].bind(this)();
-            }
-            let eventListener = this.config.discord.eventListener;
-            for(let i = 0; i < eventListener.length; i++){
-                this[eventListener[i]].bind(this)();
-            }
-        });
-
         this.update_permission_requested = false;
-        this.init();
+
+        Server.getAvailableServers().then(conf => {
+            this.config = conf.find(e => e.id == this.id);
+
+            if(this.config == undefined){
+                throw new Error(`No server with given id ${id} found.`);
+            }
+            
+            this.handler = new Handler(this.config);
+            this.discord = new Discord(this.config.discord);
+
+
+            this.properties = this.config.properties;
+
+            this.path = this.config.path;
+            this.logPath = this.path + this.config.logPath;
+            this.ops_path = this.path + ops_path;
+            this.whitelist_path = this.path + whitelist_path;
+            this.banned_ips_path = this.path + banned_ips_path;
+            this.banned_players_path = this.path + banned_players_path;
+
+            this.discord.on('ready', ()=>{
+                let discord_commands = {
+                    'server': this.discordObeyCommandServer,
+                    'temp': this.discordObeyCommandTemp,
+                    'list': this.discordObeyCommandList,
+                    'version': this.discordObeyCommandVersion,
+                    'banList': this.discordObeyCommandBanlist,
+                };
+                let obeyCommand = this.config.discord.obeyCommand;
+                for(let i = 0; i < obeyCommand.length; i++){
+                    discord_commands[obeyCommand[i]].bind(this)();
+                }
+                let eventListener = this.config.discord.eventListener;
+                for(let i = 0; i < eventListener.length; i++){
+                    this[eventListener[i]].bind(this)();
+                }
+            });
+
+            this.init();
+        });
     }
     async init(){
         this.ops = fs.readFile(this.path + ops_path, {'encoding': 'utf-8'});
@@ -79,8 +86,8 @@ class Server {
         this.banned_players = fs.readFile(this.banned_players_path, {'encoding': 'utf-8'});
 
         // Watch change of logs
-        console.log(this.path + this.logPath);
-        fs.watch(this.path + this.logPath, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, (eventType, filename) => {
+        console.log(this.logPath);
+        fs.watch(this.logPath, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, (eventType, filename) => {
             this.event.emit("logChange", filename);
         });
 
@@ -195,7 +202,7 @@ class Server {
     }
 
     async getCurrentVersion(){
-        const server_data = await this.slot.getServerData();
+        const server_data = await this.slot.getLiveData();
         if(server_data != null){
             return server_data.version.name;
         }
@@ -203,7 +210,7 @@ class Server {
     }
 
     async getPlayerList(){
-        const server_data = await this.slot.getServerData();
+        const server_data = await this.slot.getLiveData();
         if(server_data != null){
             return server_data.players.online > 0 ? server_data.players.sample.map(e => e.name) : [];
         }
@@ -252,17 +259,17 @@ class Server {
                 let dying_player = check[0].split(" ")[0];
                 let death_message = "";
                 if(killed_by != null){
-                    death_message = config.Discord.killMessage.replace('{{killed_by}}', killed_by).replace('{{dying_player}}', dying_player);
+                    death_message = this.config.discord.killMessage.replace('{{killed_by}}', killed_by).replace('{{dying_player}}', dying_player);
                 }
                 else{
-                    death_message = config.Discord.deathMessage.replace('{{dying_player}}', dying_player);
+                    death_message = this.config.discord.deathMessage.replace('{{dying_player}}', dying_player);
                 }
                 this.discord.send(death_message);
             }
         });
     }
     discordObeyCommandServer(){
-        this.discord.obeyCommand('server', () => `You can connect to the server via: ${this.slot.host}`);
+        this.discord.obeyCommand('server', () => `You can connect to the server via: ${this.slot.domain}`);
     }
     discordObeyCommandList(){
         this.discord.obeyCommand('list', async ()=>{
@@ -339,7 +346,7 @@ class Server {
         this.ops.forEach(player => {
             this.handler.tellraw(player, "A new version of paper is available, do you want to install the new Version? (Yes, No)", "yellow");
         });
-        console.log(this.ServerUpdateHost + this.ServerUpdatePath, `.${config.DownloadDir}/paper-${Date.now()}.jar`);
+        console.log(this.ServerUpdateHost + this.ServerUpdatePath, `.${this.slot.DownloadPath}/paper-${Date.now()}.jar`);
         let confirm_update = (line)=>{
             if(this.ops.findIndex(e=> e == line.initiator) != -1){
                 if(this.status != "running")
@@ -351,12 +358,12 @@ class Server {
                     this.handler.tellraw("@a", "Server will be updated. The server will shutdown in 30 seconds and will come back as soon as the update is completed.", "red");
                     this.handler.stop(30000, 5000, false, false).then(()=> {
                         // DOWNLOAD SERVER FILES
-                        this.download(this.ServerUpdateHost + this.ServerUpdatePath, "." + config.DownloadDir + "/paper-" + Date.now() + ".jar", (output_file)=>{
+                        this.download(this.ServerUpdateHost + this.ServerUpdatePath, "." + this.slot.DownloadPath + "/paper-" + Date.now() + ".jar", (output_file)=>{
                             this.status = "update installing";
                             this.emit("updateInstalling");
                             // INSTALL PROCESS
                             console.log("Installing new version of minecraft...");
-                            //console.log(execSync(`ls -l .${config.DownloadDir}`).toString().trim());
+                            //console.log(execSync(`ls -l .${this.slot.DownloadPath}`).toString().trim());
                             fs.unlinkSync(this.path + this.ServerExecutable);
                             fs.renameSync(output_file, this.path + this.ServerExecutable);
                             this.status = "update installed";
@@ -458,14 +465,19 @@ Server.getAvailableServers = async () =>{
                 if(!dir_list[j].isDirectory()){
                     return;
                 }
-                let server_dirname = dir_list[j].name;
-                let server_data = await fs.readFile(`${path}/${server_dirname}/plugins/mcsm/config.json`, {encoding: 'utf-8'});
-                server_data.properties = fs.readFile(`${path}/${server_dirname}/server.properties`, {encoding: 'utf-8'});
-                server_data.path = `${path}/${server_dirname}`;
-                server_list.push(server_data);
+                try{
+                    let server_dirname = dir_list[j].name;
+                    let server_data = JSON.parse(await fs.readFile(`${path}/${server_dirname}/plugins/mcsm/config.json`, {encoding: 'utf-8'}));
+                    server_data.properties = await fs.readFile(`${path}/${server_dirname}/server.properties`, {encoding: 'utf-8'});
+                    server_data.path = `${path}/${server_dirname}`;
+                    server_list.push(server_data);
+                }
+                catch(error){
+                    console.error(error);
+                }
             }
         }catch(error){
-            console.log(error);
+            console.error(error);
         }
     }
     return server_list;
@@ -492,6 +504,6 @@ Server.findIdByMotd = async function(motd){
     }
 }
 
-Server.available_servers = await Server.getAvailableServers();
+Server.available_servers = Server.getAvailableServers();
 
 module.exports = Server;

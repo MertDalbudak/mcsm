@@ -2,16 +2,15 @@ const {exec, execSync} = require('child_process');
 const fs = require('fs').promises;
 const Event = require('events');
 const moment = require('moment');
-const config = require('./config.json');
 
 module.exports = class {
-    constructor(server_id){
-        this.server_config = config.Servers.find(e => e.id == server_id);
+    constructor(config){
+        this.server_config = config;
         if(this.server_config == undefined){
             throw new Error(`Server handler couldn't find server in config file (Id: ${server_id})`);
         }
         this.event = new Event();
-        this.screen_id = this.server_config.bin;
+        this.screen_id = "mc-server";
         this.shutdown_notify_interval = 0;
         this.restart_timeout = 0;
         this.restart_interval = 0;

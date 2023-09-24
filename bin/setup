@@ -4,20 +4,27 @@ echo "INSTALLING MCSM ENVIRONMENT";
 
 sleep 5;
 
+MCSM_USER="mcsm";
+SERVICE_FILE=/etc/systemd/system/mcsm.service
+CURR_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+PARENT_DIRECTORY=$(dirname -- "$CURR_DIRECTORY")
+
 ## CHECK IF JAVA IS INSTALLED
 
-if java -version 2>&1 >/dev/null | grep -q "java version" ; then
+if java -version 2>&1 >/dev/null ; then
     echo "Java runtime environment installed";
 else
     echo "Java runtime environment not found. Installing...";
     # CHANGE PACKAGE MANAGER FOR YOUR MACHINE
     apt update
-    apt install openjdk-19-jre-headless zip -y
+    apt install openjdk-19-jre-headless -y
 fi
+
+apt install zip -y
 
 ## CHECK IF NODE.JS IS INSTALLED
 
-if node --version 2>&1 >/dev/null | grep -q "v" ; then
+if type -P node; then
     echo "Node.js installed";
 else
     echo "Node.js not found. Installing...";
@@ -37,43 +44,44 @@ else
 
 fi
 
-npm i --prefix ../
+npm i --prefix $PARENT_DIRECTORY
 
 ## CHECK USER EXISTS OTHERWISE ADD USER
-MCSM_USER="mcsm";
+
 if ! id -u "$MCSM_USER" >/dev/null 2>&1; then
     echo "User does not exists. Creating a new user...";
-    useradd -c "User account for mcsm service" -m -d /var/server/mcsm -G sudo mcsm;
+    useradd -c "User account for mcsm service" -m -d ${PARENT_DIRECTORY} -G sudo mcsm;
 else
     echo "User exists"
 fi
 
-chmod mcsm:mcsm ../*
+chmod -R 770 $PARENT_DIRECTORY
+chmod +x $CURR_DIRECTORY/*
+chown mcsm:mcsm ../*
 
 # SETTING UP MCSM SERVICE
 
-SERVICE_FILE=/etc/systemd/system/mcsm.service
-CURR_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-PARENT_DIRECTORY=$(dirname -- "$CURR_DIRECTORY")
-
 if [ ! -f "$SERVICE_FILE" ]; then
-    echo "[Service]
+    echo "[Unit]
+Description=MCSM DAEMON
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
 Type=simple
-Restart=never
-RestartSec=1
+Restart=on-failure
+RestartSec=1s
 User=mcsm
-ExecStart=/bin/bash -c "node $PARENT_DIRECTORY/main.js"
+ExecStart=node $PARENT_DIRECTORY/main.js
 KillMode=process
 " >> $SERVICE_FILE;
 fi
 
 
 ## config.js
-VALID_CONFIG=$(/usr/local/bin/node ./setup_config.js);
+/usr/local/bin/node $CURR_DIRECTORY/setup_config.js 2>&1;
 
 
 echo "Setup complete"
 
 sleep 3;
-
-exec "$SHELL"

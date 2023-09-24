@@ -1,5 +1,4 @@
 const { Client, Collection, Events, GatewayIntentBits, REST, Routes, SlashCommandBuilder  } = require('discord.js');
-const config = require("./config.json");
 const Event = require('events')
 
 let supported_commands = [
@@ -43,12 +42,8 @@ let supported_commands = [
 
 
 module.exports = class{
-    constructor(server_id){
-        this.server_config = config.Servers.find(e => e.id == server_id);
-        if(this.server_config == undefined){
-            throw new Error(`Couldn't couldn't find server in config file (Id: ${server_id})`);
-        }
-        this.config = this.server_config.discord;
+    constructor(config){
+        this.config = config;
         this.commands_obeyed_counter = 0;
         this.guilds = [];
         this.rest = new REST({ version: '10' }).setToken(this.config.token);
@@ -81,7 +76,7 @@ module.exports = class{
                 }
             );
             console.log("registerd");
-        }, config.Discord.commandRegisterInterval);
+        }, config.commandRegisterInterval);
     }
     async send(msg, index = null){
         if(index){

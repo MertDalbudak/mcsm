@@ -16,7 +16,7 @@ function main(){
 	//app.update();
 
 	// MONITOR CPU TEMPERATURE
-	// app.temperature(check_interval);
+	app.temperature(check_interval);
 
 	// MONITOR CPU FREQUENCY
 	//app.frequency(check_interval);
@@ -26,8 +26,6 @@ function main(){
 	// app.restartCron();
 
 	// BAN FLYING PLAYERS
-
-	app.webService();
 }
 
 app.on('ready', ()=> main());

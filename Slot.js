@@ -3,10 +3,15 @@ const Event = require('events');
 const {exec, spawn} = require('child_process');
 const config = require('./config.json').Slot;
 const util = require('minecraft-server-util');
+const Server = require('./Server/Server');
 
 class Slot{
     constructor(server_id){
         this.config = config;
+
+        this.id = this.config.id;
+        this.name = this.config.name;
+
         this.event = new Event();
         this.status = "not running";
         this.daemon_status = "not running";
@@ -14,25 +19,22 @@ class Slot{
 
         this.server = null;
 
-        this.getServerConfigs().then(configs => {
-            this.available_servers = configs;
-            if(isNaN(server_id) == false){
-                this.assignServer(server_id);
-            }
-            else{
-                // CHECK IF AN SERVER IS ALIVE IN SLOT
-                this.getLiveData().then(async (data) => {
-                    console.log(data);
-                    if(data){
-                        const id = await Slot.findIdByMotd(data.motd.clean);
-                        if(isNaN(id) == false){
-                            this.assignServer(id);
-                        }
+        if(server_id){
+            this.assignServer(server_id);
+        }
+        else{
+            // CHECK IF AN SERVER IS ALIVE IN SLOT
+            this.getLiveData().then(async (data) => {
+                console.log(data);
+                if(data){
+                    const id = await Server.findIdByMotd(data.motd.clean);
+                    if(isNaN(id) == false){
+                        this.assignServer(id);
                     }
-                });
-            }
-            this.event.emit('ready');
-        });
+                }
+            });
+        }
+        this.event.emit('ready');
     }
 
     async getLiveData(){
@@ -49,17 +51,22 @@ class Slot{
     }
 
     async assignServer(server_id){
-        const server_config = this.available_servers.find(e => e.id == server_id);
+        const server_config = (await Server.available_servers).find(e => e.id == server_id);
         if(server_config == undefined){
             throw new Error(`No server with given id ${server_id} found.`);
         }
-        const Server = require(`./Server/${server_config.type}`);
-        this.server = new Server(server_id);
+        const _Server = require(`./Server/${server_config.type}`);
+        this.server = new _Server(server_id);
         this.server.slot = this;
-        await this.server.setPort(this.port)
-        this.status = "running";
-        this.event.emit('serverAssigned', this.server);
-        this.checkDaemon();
+        await (new Promise((res) => {
+            this.server.on('ready', async ()=>{
+                await this.server.setPort(this.port);
+                this.status = "running";
+                this.event.emit('serverAssigned', this.server);
+                this.checkDaemon();
+                res();
+            });
+        }));
     }
 
     checkDaemon(callback){
@@ -161,6 +168,7 @@ class Slot{
             this.suspendServerStart();  // SUSPEND SLOT SERVER START
             await this.assignServer(id);    // ASSIGN SERVER TO THIS SLOT
             // TRY STARTING THE SERVER
+            console.log([`${process.env.ROOT}/bin/start`, `-p ${this.server.path}`]);
             const mc_server_spawn = spawn('bash', [`${process.env.ROOT}/bin/start`, `-p ${this.server.path}`], spawn_options);
             mc_server_spawn.unref();
             this.server.discord.on('ready', ()=>{
@@ -171,7 +179,7 @@ class Slot{
         }
         catch(error){
             callback("Current server have been stopped but something went wrong starting the desired server", {'message': error})
-            console.log(error);
+            console.error(error);
         }
     }
 
@@ -236,12 +244,13 @@ class Slot{
         }
         return {
             'id': this.id,
-            'host': this.host,
-            'port': this.port,
-            'srvRecord': this.srvRecord,
-            'available_server': Slot.available_server,
+            'name': this.name,
+            'domain': this.config.domain,
+            'port': this.config.port,
+            'srvRecord': this.config.srvRecord,
+            'available_server': (await Server.getAvailableServers()),
             'status': this.status,
-            'server':  server
+            'server': server
         }
     }
     // SETTER
@@ -250,8 +259,6 @@ class Slot{
         this.event.emit('daemonStatusChange', status);
     }
 }
-
-Slot.available_server = this.available_servers.map(e => ({'id': e.id}));
 
 // PRIVATE VAR
 let daemon_status = "";

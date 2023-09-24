@@ -20,7 +20,13 @@ module.exports = class {
         this.recent_system_temp = 0.00;
         this.recent_system_freq = 0;
         this.event = new Event();
-        this.slot = new Slot(config.Slot.id);
+        this.slot = new Slot();
+        if(config.WebAPI){
+            this.webService();
+        }
+        else{
+            process.stdin.resume();
+        }
         setTimeout(()=>this.event.emit('ready'), 100);
     }
     
