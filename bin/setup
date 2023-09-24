@@ -32,11 +32,11 @@ else
 
     apt install npm -y
 
-    npm i -g npm
-
     npm i -g n
 
     n stable
+
+    npm install -g npm@latest
 
     # RESTART SHELL
 
