@@ -169,7 +169,7 @@ const slot_srv = () => new Promise((res, rej) => {
 
 const backup_path = () => (new Promise((res, rej) => {
     rl.question("Specify a backup path: ", path =>{
-        config.BackupPath = path || "/var/server/mcsm/backup";
+        config.BackupPath = p.resolve(path);
         fs.access(config.BackupPath, (error) => {
             if(error) {
                 try {

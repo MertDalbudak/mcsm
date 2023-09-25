@@ -1,5 +1,5 @@
 const fs = require('fs').promises;
-fs.watch = require('fs').watch; // USE STANDARD WATCH INSTEAD OF fs/promise.watch
+fs.watch = require('fs').watch; // USE CALLBACK WATCH INSTEAD OF fs/promise.watch
 
 const Event = require('events');
 const {get} = require('https');
