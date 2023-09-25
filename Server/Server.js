@@ -485,11 +485,12 @@ Server.getAvailableServers = async () =>{
 
 Server.findIdByMotd = async function(motd){
     motd = motd.trim();
+    const servers = await Server.available_servers;
     try{
-        for(let i = 0; i < Server.available_servers.length; i++){
-            let server = Server.available_servers[i];
+        for(let i = 0; i < servers.length; i++){
+            let server = servers[i];
 
-            let server_motd = server.properties.match(/motd=(.)+/g)
+            let server_motd = server.properties.match(/motd=(.)+/g);
             if(server_motd != null){
                 server_motd = server_motd[0].split('=')[1].trim();
                 if(server_motd == motd){
