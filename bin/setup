@@ -87,6 +87,7 @@ WantedBy=multi-user.target
 " >> $SERVICE_FILE;
 fi
 
+systemctl enable mcsm.service
 
 ## config.js
 /usr/local/bin/node $CURR_DIRECTORY/setup_config.js 2>&1;

@@ -70,7 +70,7 @@ module.exports = class {
                     if(err == null){
                         let freq = parseFloat(data.trim()) / 1000 / 1000;
                         this.recent_system_freq = freq;
-                        this.slot.server.handler.say(`CPU frequency is ${freq} Ghz`);
+                        this.slot.server.handler.say(`CPU frequency is ${freq.toFixed(2)} Ghz`);
                     }
                     else{
                         console.error(err);
