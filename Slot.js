@@ -168,7 +168,6 @@ class Slot{
             this.suspendServerStart();  // SUSPEND SLOT SERVER START
             await this.assignServer(id);    // ASSIGN SERVER TO THIS SLOT
             // TRY STARTING THE SERVER
-            console.log([`${process.env.ROOT}/bin/start`, `-p ${this.server.path}`]);
             const mc_server_spawn = spawn('bash', [`${process.env.ROOT}/bin/start`, `-p ${this.server.path}`], spawn_options);
             mc_server_spawn.unref();
             this.server.discord.on('ready', ()=>{

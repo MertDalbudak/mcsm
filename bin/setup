@@ -20,7 +20,7 @@ else
     apt install openjdk-19-jre-headless -y
 fi
 
-apt install zip -y
+apt install screen zip -y
 
 ## CHECK IF NODE.JS IS INSTALLED
 
