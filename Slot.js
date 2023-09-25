@@ -247,7 +247,7 @@ class Slot{
             'domain': this.config.domain,
             'port': this.config.port,
             'srvRecord': this.config.srvRecord,
-            'available_server': (await Server.getAvailableServers()) || [],
+            'available_servers': (await Server.getAvailableServers()) || [],
             'status': this.status,
             'server': server
         }
