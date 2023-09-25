@@ -7,7 +7,7 @@
 	action['stop'] 		->	Server shutdown					
 		action['stop'][0] -> Time before server shutdown in ms
 		action['stop'][1] -> Server shutdown announcement interval in ms
-	action['kill']	->	Kill Server
+	action['kill']		->	Kill Server
 */
 
 const temperature_levels = [
@@ -53,7 +53,7 @@ const temperature_levels = [
 		})
 	},
 	{
-		"max_temp": 999,
+		"max_temp": Infinity,
 		"action": (...args) => ({
 			'log': "Server is too hot. Server shuting down immediately",
 			'kill': true

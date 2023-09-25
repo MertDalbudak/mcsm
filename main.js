@@ -19,7 +19,7 @@ function main(){
 	app.temperature(check_interval);
 
 	// MONITOR CPU FREQUENCY
-	//app.frequency(check_interval);
+	app.frequency(check_interval);
 
 	// TIME INTERVAL OF SERVER BEING RESTARTET
 	// app.restartCron('*/1 * * * *');

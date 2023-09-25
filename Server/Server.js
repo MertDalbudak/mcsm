@@ -86,7 +86,6 @@ class Server {
         this.banned_players = fs.readFile(this.banned_players_path, {'encoding': 'utf-8'});
 
         // Watch change of logs
-        console.log(this.logPath);
         fs.watch(this.logPath, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, (eventType, filename) => {
             this.event.emit("logChange", filename);
         });
@@ -139,20 +138,28 @@ class Server {
         })
     }
     fileReadLastLines(path, n, callback){
-        exec("tail -n " + n + " " + path, function(err, stdout, stderr){
-            callback(stdout.toString().trim());
+        exec(`tail -n ${n} ${path}`, function(err, stdout, stderr){
+            if(err || stderr){
+                console.error(err);
+                console.error(stderr);
+
+                callback("ERROR READING LOG FILE")
+            }
+            else{
+                callback(stdout.toString().trim());
+            }
         });
     }
     fileReadLastLinesSync(path, n){
         return execSync(`tail -n ${n} ${path}`).toString().trim();
     }
     logLastLines(n, callback){
-        this.fileReadLastLines(this.path + this.logPath, n, (lines)=>{
+        this.fileReadLastLines(this.logPath, n, (lines)=>{
             callback(lines);
         });
     }
     logLastLinesSync(n){
-        return this.fileReadLastLinesSync(this.path + this.logPath, n);
+        return this.fileReadLastLinesSync(this.logPath, n);
     }
     parseLine(line){
         let report_info = line.match(/^\[[0-9]*:[0-9]*:[0-9]*\] \[(.)*\]:/);
@@ -234,8 +241,8 @@ class Server {
             if(check != null){
                 let flying_player = check[0].split(" ")[0];
                 this.handler.ban(flying_player, "Flying is not allowed", '24h');
-                this.discord.send(`${flying_player} is banned for 24 hours because of flying`);
                 this.handler.say(`${flying_player} is banned for 24 hours because of flying`);
+                this.discord.send(`${flying_player} is banned for 24 hours because of flying`);
             }
         });
     }
@@ -247,6 +254,7 @@ class Server {
             let killed_by = null;
             for(let i = 0; i < death_messages.length; i++){
                 const check_kill = new RegExp(`([^<>]+) ${death_messages[i]}`);
+                console.log(check_kill);
                 check = line.content.match(check_kill);
                 if(check != null){
                     if(i < 28){
@@ -459,25 +467,30 @@ Server.getAvailableServers = async () =>{
     let server_list = [];
     for(let i = 0; i < config.path.length; i++){
         let path = config.path[i];
+        let dir_list = null;
         try{
-            let dir_list = await fs.readdir(path, { withFileTypes: true });
-            for(let j = 0; j < dir_list.length; j++){
-                if(!dir_list[j].isDirectory()){
-                    return;
-                }
-                try{
-                    let server_dirname = dir_list[j].name;
-                    let server_data = JSON.parse(await fs.readFile(`${path}/${server_dirname}/plugins/mcsm/config.json`, {encoding: 'utf-8'}));
-                    server_data.properties = await fs.readFile(`${path}/${server_dirname}/server.properties`, {encoding: 'utf-8'});
-                    server_data.path = `${path}/${server_dirname}`;
-                    server_list.push(server_data);
-                }
-                catch(error){
-                    console.error(error);
-                }
-            }
+            dir_list = await fs.readdir(path, { withFileTypes: true });
         }catch(error){
             console.error(error);
+            continue;
+        }
+        for(let j = 0; j < dir_list.length; j++){
+            if(!dir_list[j].isDirectory()){
+                continue;
+            }
+            let server_dirname = dir_list[j].name;
+            let server_path = `${path}/${server_dirname}`;
+            let server_data = null;
+            try{
+                server_data = JSON.parse(await fs.readFile(`${server_path}/plugins/mcsm/config.json`, {encoding: 'utf-8'}));
+                server_data.properties = await fs.readFile(`${server_path}/server.properties`, {encoding: 'utf-8'});
+            }
+            catch(error){
+                // console.error(error);
+                continue;
+            }
+            server_data.path = server_path;
+            server_list.push(server_data);
         }
     }
     return server_list;

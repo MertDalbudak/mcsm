@@ -35,33 +35,50 @@ function server_plugin_setup(){
     // CHECK IF PLUGIN ALREADY INSTALLED
     for(let i = 0; i < config.Server.path.length; i++){
         let path = config.Server.path[i];
-        fs.readdirSync(path, { withFileTypes: true }).forEach(server_dir => {
-            if(!server_dir.isDirectory()){
-                return;
-            }
-            let server_dirname = server_dir.name;
-            let plugin_path = `${path}/${server_dirname}/plugins/mcsm`;
-            let plugin_config = `${plugin_path}/config.json`;
-            fs.access(plugin_path, (error)=>{
-                if(error){
-                    console.log('Server plugin not installed. Installing...')
-                    try{
-                        fs.mkdirSync(plugin_path);
-                    }
-                    catch(error){
-                        console.error(`Cannot create mcsm plugin folder for ${path}/${server_dirname}`);
-                        return;
-                    }
+        try{
+            fs.readdirSync(path, { withFileTypes: true }).forEach(server_dir => {
+                if(!server_dir.isDirectory()){
+                    return;
                 }
-                fs.access(plugin_config, (error)=>{
+                let server_dirname = server_dir.name;
+                let server_path = `${path}/${server_dirname}`
+                let plugin_path = `${server_path}/plugins/mcsm`;
+                let plugin_config = `${plugin_path}/config.json`;
+                fs.access(plugin_path, (error)=>{
                     if(error){
-                        let server_config = JSON.parse(fs.readFileSync(server_config_default_path));
-                        server_config.id = parseInt(Math.random().toFixed(16).toString().substring(2)); // RANDOM NUMBER
-                        fs.writeFileSync(plugin_config, JSON.stringify(server_config, null, "\t"));
+                        console.log('Server plugin not installed. Installing...')
+                        try{
+                            execSync(`sudo chown -R mcsm:mcsm ${server_path}`);
+                            execSync(`sudo chmod -R 777 ${server_path}`);
+                            fs.mkdirSync(plugin_path);
+                        }
+                        catch(error){
+                            console.error(`Cannot create mcsm plugin folder for ${server_path}`);
+                            return;
+                        }
                     }
+                    fs.access(plugin_config, (error)=>{
+                        if(error){
+                            let server_config = JSON.parse(fs.readFileSync(server_config_default_path));
+                            server_config.id = parseInt(Math.random().toFixed(16).toString().substring(2)); // RANDOM NUMBER
+                            fs.writeFileSync(plugin_config, JSON.stringify(server_config, null, "\t"));
+                            try{
+                                execSync(`sudo chown mcsm:mcsm ${plugin_config}`);
+                                execSync(`sudo chmod 777 ${plugin_config}`);
+                            }
+                            catch(error){
+                                console.error(`Couldn't set correct permissions to ${plugin_config}`);
+                                return;
+                            }
+                        }
+                    });
                 });
             });
-        });
+        }
+        catch(error){
+            console.log(`An error occured reading contents of ${path}`);
+            console.error(error);
+        }
     }
 }
 
@@ -75,10 +92,6 @@ async function config_questionaire(){
     await ask(web_api);
     await ask(server_log_check_interval);
     await ask(server_path);
-    for(let i = 0; i < config.Server.path.length; i++){
-        execSync(`sudo chown -R mcsm:mcsm ${config.Server.path[i]}`);
-        execSync(`sudo chmod -R 777 ${config.Server.path[i]}`);
-    }
 
     rl.close();
     fs.writeFileSync(config_path, JSON.stringify(config, null, "\t"));

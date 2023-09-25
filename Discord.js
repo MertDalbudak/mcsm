@@ -44,8 +44,15 @@ let supported_commands = [
 module.exports = class{
     constructor(config){
         this.config = config;
+        this.event = new Event();
         this.commands_obeyed_counter = 0;
         this.guilds = [];
+        this.connected = false;
+
+        this.login();
+    }
+
+    async login(){
         this.rest = new REST({ version: '10' }).setToken(this.config.token);
         this.client = new Client({
             intents: [
@@ -54,7 +61,13 @@ module.exports = class{
                 GatewayIntentBits.MessageContent
             ]
         });
-        this.client.login(this.config.token);
+        const login = await this.client.login(this.config.token).catch(error => {
+            console.error(error);
+        });
+        if(!login){
+            console.error("\n\nDISCORD SERVICE IS NOT AVAILABLE\n\n");
+            return false;
+        }
         this.client.commands = new Collection();
         this.client.on('ready', ()=> {
             this.channels = this.config.channels.map(ch => {
@@ -64,10 +77,9 @@ module.exports = class{
                 }
                 return channel;
             });
+            this.connected = true;
             this.event.emit('ready');
         });
-        this.event = new Event();
-
         this.registerIntervalId = setInterval(()=>{
             this.rest.put(
                 Routes.applicationCommands(this.config.clientId),
@@ -76,18 +88,40 @@ module.exports = class{
                 }
             );
             console.log("registerd");
-        }, config.commandRegisterInterval);
+        }, this.config.commandRegisterInterval);
+        return true;
     }
+
+    /**
+     * 
+     * @param {String} msg 
+     * @param {Number} index 
+     * @returns Boolean
+     */
     async send(msg, index = null){
-        if(index){
-            await this.channels[index].send(msg);
+        try {
+            if(index){
+                await this.channels[index].send(msg);
+            }
+            else{
+                for(let i = 0; i < this.channels.length; i++){
+                    await this.channels[i].send(msg);
+                };
+            }
+            return true;
         }
-        else{
-            for(let i = 0; i < this.channels.length; i++){
-                await this.channels[i].send(msg);
-            };
+        catch(error){
+            console.error(error);
+            return false;
         }
     }
+
+    /**
+     * 
+     * @param {String} command_name
+     * @param {Function} callback
+     * @returns Void
+     */
     async obeyCommand(command_name, callback){
         const command = supported_commands.find(e => e.name === command_name);
         if(command){
@@ -172,14 +206,21 @@ module.exports = class{
             throw new Error('Obey command not supported');
         }
     }
+
     // OBEY COMMAND WITHOUT SLASH COMMAND SUPPORT
+    /**
+     * 
+     * @param {String} command_name
+     * @param {Function} callback
+     * @returns Void
+     */
     obeyCommandText(command_name, callback){
         const command = supported_commands.find(e => e.name === command_name);
         if(command){
             command.active = true;
             this.client.on('messageCreate', async (message) => {
                 if (this.config.channels.find(ch => ch.id == message.channel.id)) {
-                    if(message.content === config.Discord.commandPrefix + command_name){
+                    if(message.content === this.config.commandPrefix + command_name){
                         message.react("👍");
                         let command_reply = command.reply(message.author.username);
                         if(command_reply != null){
@@ -211,9 +252,21 @@ module.exports = class{
         clearInterval(this.registerIntervalId);
         this.client.destroy()
     }
+    /**
+     * 
+     * @param {String} name
+     * @param {Function} callback
+     * @returns Void
+     */
     on(name, callback){ // THIS IS A SHORTCUT FOR ADDING AN EVENT LISTENER
         this.event.on(name, callback);
     }
+    /**
+     * 
+     * @param {String} name
+     * @param {Function} callback
+     * @returns Void
+     */
     once(name, callback){ // THIS IS A SHORTCUT FOR ADDING AN EVENT LISTENER
         this.event.once(name, callback);
     }

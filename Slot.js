@@ -25,7 +25,6 @@ class Slot{
         else{
             // CHECK IF AN SERVER IS ALIVE IN SLOT
             this.getLiveData().then(async (data) => {
-                console.log(data);
                 if(data){
                     const id = await Server.findIdByMotd(data.motd.clean);
                     if(isNaN(id) == false){
@@ -43,7 +42,8 @@ class Slot{
             data = await util.status('localhost', this.port, {'timeout': 800});
         }
         catch(error){
-            console.error(error);
+            console.log("No server is running currently")
+            // console.error(error);
         }
         finally{
             return data;
@@ -247,7 +247,7 @@ class Slot{
             'domain': this.config.domain,
             'port': this.config.port,
             'srvRecord': this.config.srvRecord,
-            'available_server': (await Server.getAvailableServers()),
+            'available_server': (await Server.getAvailableServers()) || [],
             'status': this.status,
             'server': server
         }

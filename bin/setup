@@ -1,6 +1,11 @@
 #!/bin/bash
 
-echo "INSTALLING MCSM ENVIRONMENT";
+echo "
+#########################################
+#                                       #
+#       INSTALLING MCSM ENVIRONMENT     #
+#                                       #
+#########################################";
 
 sleep 5;
 
@@ -57,7 +62,7 @@ else
     echo "User exists"
 fi
 
-chown -R mcsm:mcsm ../*
+chown -R mcsm:mcsm .$PARENT_DIRECTORY/*
 chmod -R 777 $PARENT_DIRECTORY
 chmod +x $CURR_DIRECTORY/*
 
@@ -76,6 +81,9 @@ RestartSec=1s
 User=mcsm
 ExecStart=node $PARENT_DIRECTORY/main.js
 KillMode=process
+
+[Install]
+WantedBy=multi-user.target
 " >> $SERVICE_FILE;
 fi
 
