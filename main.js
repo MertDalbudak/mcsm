@@ -13,19 +13,16 @@ const check_interval = 15000; // time in ms
 
 function main(){
 	// CHECK IF NEW PAPER VERSION IS AVAILABLE
-	//app.update();
 
 	// MONITOR CPU TEMPERATURE
 	app.temperature(check_interval);
 
 	// MONITOR CPU FREQUENCY
-	app.frequency(check_interval);
+	// app.frequency(check_interval);
 
 	// TIME INTERVAL OF SERVER BEING RESTARTET
 	// app.restartCron('*/1 * * * *');
 	// app.restartCron();
-
-	// BAN FLYING PLAYERS
 }
 
 app.on('ready', ()=> main());

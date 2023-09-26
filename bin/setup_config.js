@@ -3,16 +3,16 @@ let fs = require('fs');
 const readline = require('readline');
 const { execSync } = require('child_process');
 
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
 const config_path = p.resolve(`${__dirname}/../config.json`);
 const config_default_path = p.resolve(`${__dirname}/../resources/config-default.json`);
 const server_config_default_path = p.resolve(`${__dirname}/../resources/server-default-config.json`);
 
 let config_default, config;
-
-var rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
 
 // CHECK IF config.json EXISTS
 fs.access(config_path, async(error) => {
@@ -237,7 +237,7 @@ const api_port = () => new Promise((res, rej) => {
 
 const api_auth = () => new Promise((res, rej) => {
     rl.question(`Enter your mcsw API authentification token: `, token =>{
-        if(token.match("^[a-fA-F0-9]{40}$")){
+        if(token.match("^[a-fA-F0-9]{64}$")){
             config.MCSM_API_AUTHENTICATION = token;
             res();
         }
