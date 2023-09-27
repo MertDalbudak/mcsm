@@ -43,7 +43,7 @@ else
 
     npm cache clean -f
 
-    npm i -g npm
+    /usr/local/bin/npm i -g npm
 
     # RESTART SHELL
 
@@ -51,7 +51,7 @@ else
 
 fi
 
-npm i --prefix $PARENT_DIRECTORY
+/usr/local/bin/npm i --prefix $PARENT_DIRECTORY
 
 ## CHECK USER EXISTS OTHERWISE ADD USER
 
