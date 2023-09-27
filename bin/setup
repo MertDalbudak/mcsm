@@ -41,9 +41,7 @@ else
 
     n stable
 
-    npm cache clean -f
-
-    /usr/local/bin/npm i -g npm
+    /usr/local/bin/npm cache clean -f
 
     # RESTART SHELL
 
