@@ -1,12 +1,8 @@
 # Installation
 
-Clone this git repository to your machine/container that has access to your minecraft server folders.
-Run the `bin/setup` script in your Debian based environment and follow the instructions.
+Clone this git repository to your machine/container that has access to your minecraft server folders. <br>
+Run the `bin/setup` script on Ubuntu 22.04 LTS environment and follow the instructions. Other distributions might work as well.
 
-If the installation script indicates an error while running you might run `npm i` as well.
-
-After the setup is complete you can start your mcsm server with the following command.
-
-`systemctl start mcsm.service`
+After the setup is complete reboot your system. `mcsm` will be started as a daemon when your system boots up.
 
 Currently only Java Minecraft Servers are supported. Bedrock will follow as soon as possible.
