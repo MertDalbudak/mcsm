@@ -64,8 +64,6 @@ chown -R mcsm:mcsm "$PARENT_DIRECTORY"/*
 chmod -R 777 "$PARENT_DIRECTORY"
 chmod +x "$CURR_DIRECTORY"/*
 
-# SETTING UP MCSM SERVICE
-
 ## config.js
 /usr/bin/node "$CURR_DIRECTORY/setup_config.js" 2>&1;
 
