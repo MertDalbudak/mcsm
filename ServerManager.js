@@ -13,14 +13,14 @@ const DIR_NAME = __dirname;
 
 
 module.exports = class {
-    constructor(){
+    constructor(server_id){
         this.monitor = {};
         this.temp_policy = require('./temp_policy.js');
         this.shutdown_temp_threshold = null;
         this.recent_system_temp = 0.00;
         this.recent_system_freq = 0;
         this.event = new Event();
-        this.slot = new Slot();
+        this.slot = new Slot(server_id);
         if(config.WebAPI){
             this.webService();
         }

@@ -254,7 +254,7 @@ const server_log_check_interval = () => new Promise((res, rej) => {
             rej("Input must be numeric");
         }
         else{
-            config.ServerLogCheckInterval = interval || default_value;
+            config.Server.logCheckInterval = interval || default_value;
             res();
         }
     });

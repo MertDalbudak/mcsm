@@ -19,10 +19,10 @@
         "noServiceTimeout": 2775,
 		"commandRegisterInterval": 30000,
         "commandPrefix": "/",
-        "eventListener": [
-            "banFlying", "checkDeath", "antiToxicity"
-        ],
         "deathMessage": "{{dying_player}} died, hahahaha!",
         "killMessage": "{{dying_player}} was killed by {{killed_by}}"
-    }
+    },
+    "eventListener": [
+        "banFlying", "checkDeath", "antiToxicity"
+    ]
 }

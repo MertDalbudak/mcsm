@@ -1,5 +1,5 @@
 const fs = require('fs').promises;
-fs.watch = require('fs').watch; // USE CALLBACK WATCH INSTEAD OF fs/promise.watch
+fs.watchFile = require('fs').watchFile; // USE CALLBACK WATCH INSTEAD OF fs/promise.watch
 
 const Event = require('events');
 const {get} = require('https');
@@ -20,7 +20,6 @@ const banned_players_path = "/banned-players.json";
 const death_messages = require('../resources/death_messages.json');
 const blacklist_words = require('../resources/blacklist-words.json');
 const blacklist_words_regex = blacklist_words.join('|');
-
 
 class Server {
     /**
@@ -48,16 +47,6 @@ class Server {
             this.handler = new Handler(this.config);
             this.discord = new Discord(this.config.discord);
 
-
-            this.properties = this.config.properties;
-
-            this.path = this.config.path;
-            this.logPath = this.path + this.config.logPath;
-            this.ops_path = this.path + ops_path;
-            this.whitelist_path = this.path + whitelist_path;
-            this.banned_ips_path = this.path + banned_ips_path;
-            this.banned_players_path = this.path + banned_players_path;
-
             this.discord.on('ready', ()=>{
                 let discord_commands = {
                     'server': this.discordObeyCommandServer,
@@ -70,11 +59,21 @@ class Server {
                 for(let i = 0; i < obeyCommand.length; i++){
                     discord_commands[obeyCommand[i]].bind(this)();
                 }
-                let eventListener = this.config.discord.eventListener;
-                for(let i = 0; i < eventListener.length; i++){
-                    this[eventListener[i]].bind(this)();
-                }
             });
+
+            this.properties = this.config.properties;
+
+            this.path = this.config.path;
+            this.logPath = this.path + this.config.logPath;
+            this.ops_path = this.path + ops_path;
+            this.whitelist_path = this.path + whitelist_path;
+            this.banned_ips_path = this.path + banned_ips_path;
+            this.banned_players_path = this.path + banned_players_path;
+
+            let eventListener = this.config.eventListener;
+            for(let i = 0; i < eventListener.length; i++){
+                this[eventListener[i]].bind(this)();
+            }
 
             this.init();
         });
@@ -86,7 +85,7 @@ class Server {
         this.banned_players = fs.readFile(this.banned_players_path, {'encoding': 'utf-8'});
 
         // Watch change of logs
-        fs.watch(this.logPath, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, (eventType, filename) => {
+        fs.watchFile(this.logPath, { 'persistent': true,  'interval': config.logCheckInterval}, (eventType, filename) => {
             this.event.emit("logChange", filename);
         });
 
@@ -107,7 +106,7 @@ class Server {
             this.banned_players = await this.banned_players;
 
             // Watch change of ops
-            fs.watch(this.ops_path, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, (eventType, filename) => {
+            fs.watchFile(this.ops_path, { 'persistent': true,  'interval': config.logCheckInterval}, (eventType, filename) => {
                 this.event.emit("opsChange", filename);
                 fs.readFile(this.ops_path, {'encoding': 'utf-8'}).then((data)=>{
                     this.event.emit("opsChange", {'current': this.ops, 'new': data});
@@ -117,7 +116,7 @@ class Server {
             });
 
             // Watch change of whitelist
-            fs.watch(this.whitelist_path, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, (eventType, filename) => {
+            fs.watchFile(this.whitelist_path, { 'persistent': true,  'interval': config.logCheckInterval}, (eventType, filename) => {
                 fs.readFile(this.whitelist_path, {'encoding': 'utf-8'}).then((data)=>{
                     this.event.emit("whitelistChange", {'current': this.banned_players, 'new': data});
                     this.whitelist = data;
@@ -126,7 +125,7 @@ class Server {
             });
 
             // Watch change of banned players
-            fs.watch(this.banned_players_path, { 'persistent': true,  'interval': this.ServerLogCheckInterval}, (eventType, filename) => {
+            fs.watchFile(this.banned_players_path, { 'persistent': true,  'interval': config.logCheckInterval}, (eventType, filename) => {
                 fs.readFile(this.banned_players_path, {'encoding': 'utf-8'}).then((data)=>{
                     this.event.emit("bannedPlayersChange", {'current': this.banned_players, 'new': data});
                     this.banned_players = data;
@@ -254,7 +253,6 @@ class Server {
             let killed_by = null;
             for(let i = 0; i < death_messages.length; i++){
                 const check_kill = new RegExp(`([^<>]+) ${death_messages[i]}`);
-                console.log(check_kill);
                 check = line.content.match(check_kill);
                 if(check != null){
                     if(i < 28){

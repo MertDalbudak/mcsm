@@ -20,7 +20,11 @@ class Slot{
         this.server = null;
 
         if(server_id){
-            this.assignServer(server_id);
+            this.startServer(server_id, (error, response)=>{
+                if(error){
+                    console.error(error.toString());
+                }
+            });
         }
         else{
             // CHECK IF AN SERVER IS ALIVE IN SLOT

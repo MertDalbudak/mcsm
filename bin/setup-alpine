@@ -1,0 +1,74 @@
+#!/bin/sh
+
+echo "
+#########################################
+#                                       #
+#       INSTALLING MCSM ENVIRONMENT     #
+#                                       #
+#########################################";
+
+#sleep 5;
+
+MCSM_USER="mcsm";
+SERVICE_FILE=/etc/systemd/system/mcsm.service
+CURR_DIRECTORY="$( cd "$( dirname "$BASH_SOURCE[0]" )" &> /dev/null && pwd )"
+PARENT_DIRECTORY=$(dirname "$CURR_DIRECTORY")
+
+## CHECK IF JAVA IS INSTALLED
+
+if java -version 2>&1 >/dev/null ; then
+    echo "Java runtime environment installed";
+else
+    echo "Java runtime environment not found. Installing...";
+    # CHANGE PACKAGE MANAGER FOR YOUR MACHINE
+    apk update
+    apk add openjdk17-jre-headless
+fi
+
+apk add screen zip
+
+## CHECK IF NODE.JS IS INSTALLED
+
+if type -P node; then
+    echo "Node.js installed";
+else
+    echo "Node.js not found. Installing...";
+    # CHANGE PACKAGE MANAGER FOR YOUR MACHINE
+
+    apk add --update npm
+
+    npm i -g n
+
+    n stable
+
+    /usr/bin/npm cache clean -f
+
+    # RESTART SHELL
+
+    echo "Nodejs installed correctly"
+
+fi
+
+/usr/bin/npm i --prefix "$PARENT_DIRECTORY"
+
+## CHECK USER EXISTS OTHERWISE ADD USER
+
+if ! id -u "$MCSM_USER" >/dev/null 2>&1; then
+    echo "User does not exists. Creating a new user...";
+    adduser mcsm --no-create-home --home "$PARENT_DIRECTORY"
+else
+    echo "User exists"
+fi
+
+chown -R mcsm:mcsm "$PARENT_DIRECTORY"/*
+chmod -R 777 "$PARENT_DIRECTORY"
+chmod +x "$CURR_DIRECTORY"/*
+
+# SETTING UP MCSM SERVICE
+
+## config.js
+/usr/bin/node "$CURR_DIRECTORY/setup_config.js" 2>&1;
+
+echo "Setup complete"
+
+sleep 3;

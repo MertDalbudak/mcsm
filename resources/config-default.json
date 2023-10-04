@@ -6,7 +6,7 @@
     "BackupPath": "/backup",
     "DownloadPath": "/download",
     "MCSM_API_PORT": 8124,
-    "MCSM_API_AUTHENTICATION": "sha-1",
+    "MCSM_API_AUTHENTICATION": "sha-256",
     "Slot": {
         "id": 1,
         "name": "The sloth slot",
