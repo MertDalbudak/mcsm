@@ -11,7 +11,7 @@ echo "
 
 MCSM_USER="mcsm";
 SERVICE_FILE=/etc/systemd/system/mcsm.service
-CURR_DIRECTORY="$( cd "$( dirname "$BASH_SOURCE[0]" )" &> /dev/null && pwd )"
+CURR_DIRECTORY="$( cd "$( dirname "$0" )" &> /dev/null && pwd )"
 PARENT_DIRECTORY=$(dirname "$CURR_DIRECTORY")
 
 ## CHECK IF JAVA IS INSTALLED
