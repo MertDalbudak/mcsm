@@ -1,0 +1,12 @@
+#!/bin/sh
+
+SCREEN_NAME="mc-server"
+
+if screen -list | grep -q $SCREEN_NAME; then
+    screen -S $SCREEN_NAME -X stuff 'say Server is stopping in 3 seconds\n';
+    sleep 3
+    screen -S $SCREEN_NAME -X stuff 'stop\n';
+    echo "Stopped";
+else
+    echo "No server found";
+fi

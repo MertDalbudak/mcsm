@@ -172,7 +172,7 @@ class Slot{
             this.suspendServerStart();  // SUSPEND SLOT SERVER START
             await this.assignServer(id);    // ASSIGN SERVER TO THIS SLOT
             // TRY STARTING THE SERVER
-            const mc_server_spawn = spawn('bash', [`${process.env.ROOT}/bin/start`, `-p ${this.server.path}`], spawn_options);
+            const mc_server_spawn = spawn('sh', [`${process.env.ROOT}/bin/start.sh`, `-p ${this.server.path}`], spawn_options);
             mc_server_spawn.unref();
             this.server.discord.on('ready', ()=>{
                 this.server.discord.send(`The Minecraft server thats linked to this channel has started. You might be able to join the server in a minute.`);
