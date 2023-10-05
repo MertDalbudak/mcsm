@@ -97,7 +97,7 @@ class Slot{
         this.server.slot = this;
         await (new Promise((res) => {
             this.server.on('ready', async ()=>{
-                await this.server.setPort(this.port);
+                await this.server.setPort(this.config.port);
                 this.status = "running";
                 this.event.emit('serverAssigned', this.server);
                 this.getServerStatus();
