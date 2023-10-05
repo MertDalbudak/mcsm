@@ -31,7 +31,6 @@ class Slot{
         else{
             // CHECK IF AN SERVER IS ALIVE IN SLOT
             this.getLiveServer().then(async (data) => {
-                console.log(data);
                 if(data != null){
                     this.assignServer(data.id);
                 }
@@ -69,9 +68,7 @@ class Slot{
             try{
                 const level_name = available_servers[i].properties.match(/level-name=(.)+/g)[0].split('=')[1].trim();
                 const session_lock_file = path.join(available_servers[i].path, level_name, 'session.lock');
-                console.log(session_lock_file);
                 const {stderr, stdout} = await exec.__promise__(`lsof -n ${session_lock_file}`);
-                console.log('error ' + stderr, 'output ' + stdout);
                 if(stderr == "" && stdout != ""){
                     this.event.emit('started');
                     return available_servers[i];
@@ -160,7 +157,6 @@ class Slot{
             this.suspendServerStart();  // SUSPEND SLOT SERVER START
             await this.assignServer(id);    // ASSIGN SERVER TO THIS SLOT
             // TRY STARTING THE SERVER
-            console.log(`${process.env.ROOT}/bin/start.sh -p ${this.server.path}`);
             const mc_server_spawn = spawn('sh', [`${process.env.ROOT}/bin/start.sh`, `-p ${this.server.path}`], spawn_options);
             mc_server_spawn.unref();
             this.server.discord.on('ready', ()=>{

@@ -87,7 +87,7 @@ module.exports = class{
                     'body': this.client.commands.map(c => c.data.toJSON())
                 }
             );
-            console.log("registerd");
+            console.log("Discord commands registerd");
         }, this.config.commandRegisterInterval);
         return true;
     }
@@ -229,7 +229,6 @@ module.exports = class{
                         try{
                             if(callback){
                                 let reply_msg = await callback();
-                                console.log(reply_msg);
                                 message.channel.send(reply_msg);
                             }
                         }

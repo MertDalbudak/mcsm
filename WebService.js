@@ -48,7 +48,6 @@ class WebService {
         WebService.send(socket);
     }
     async stopServer(socket, data){
-        console.log(data);
         const slot = this.manager.slot;
         if(slot){
             slot.stopServer((error, data)=>{
@@ -68,7 +67,6 @@ class WebService {
         }
     }
     async startServer(socket, data){
-        console.log(data);
         const slot = this.manager.slot;
         if(slot){
             if(slot.suspend_mc_start){

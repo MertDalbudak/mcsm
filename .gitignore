@@ -1,4 +1,7 @@
 .DS_Store
 ._*
+.cache
+.config
+.npm
 /node_modules
 config.json
