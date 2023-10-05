@@ -56,6 +56,7 @@ fi
 if ! id -u "$MCSM_USER" >/dev/null 2>&1; then
     echo "User does not exists. Creating a new user...";
     useradd -c "User account for mcsm service" -m -d ${PARENT_DIRECTORY} -G sudo mcsm;
+    passwd -d mcsm
 else
     echo "User exists"
 fi

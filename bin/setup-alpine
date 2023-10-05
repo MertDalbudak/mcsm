@@ -7,7 +7,7 @@ echo "
 #                                       #
 #########################################";
 
-#sleep 5;
+sleep 5;
 
 MCSM_USER="mcsm";
 SERVICE_FILE=/etc/systemd/system/mcsm.service
@@ -55,7 +55,8 @@ fi
 
 if ! id -u "$MCSM_USER" >/dev/null 2>&1; then
     echo "User does not exists. Creating a new user...";
-    adduser mcsm --no-create-home --home "$PARENT_DIRECTORY"
+    adduser mcsm --no-create-home --home "$PARENT_DIRECTORY" --disabled-password
+    passwd -d mcsm
 else
     echo "User exists"
 fi
