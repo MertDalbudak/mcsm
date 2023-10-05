@@ -1,5 +1,5 @@
 const fs = require('fs').promises;
-fs.watchFile = require('fs').watchFile; // USE CALLBACK WATCH INSTEAD OF fs/promise.watch
+fs.watchFile = require('fs').watchFile; // USE CALLBACK watch_file
 
 const Event = require('events');
 const {get} = require('https');
@@ -178,24 +178,18 @@ class Server {
         return parsed_line;
     }
 
-    restartCron(cron = config.ServerRestartInterval){
+    restartCron(cron = config.restartInterval){
         this.restart_cron = new CronJob(cron, ()=>{
             if(this.status != "running")
                 return false;
             this.status = "restarting";
             this.handler.tellraw("@a", "Server will restart in 30 seconds", "yellow");
             this.handler.stop(30000, 5000, false, false).then(()=>{
-                this.once('daemonStatusChange', (event)=>{
-                    if(this.daemon_status == 'not running'){
-                        console.log("restart closed", "starting...");
-                        this.startServer(()=>{
-                            this.status = "restartComplete";
-                            this.event.emit('restartComplete');
-                        });
-                    }
-                    else {
-                        throw new Error("Daemon still Alive");
-                    }
+                this.slot.once('stopped', (event)=>{
+                    console.log("restart closed", "starting...");
+                    this.startServer(()=>{
+                        this.event.emit('restarted');
+                    });
                 });
             })
         }, null, true, 'Europe/Berlin');
@@ -203,12 +197,12 @@ class Server {
     }
     
     updateCron(){
-        this.update_cron = new CronJob(config.ServerCheckUpdateInterval, this.update, null, true, 'Europe/Berlin');
+        this.update_cron = new CronJob(config.checkUpdateInterval, this.update, null, true, 'Europe/Berlin');
         this.update_cron.start();
     }
 
     async getCurrentVersion(){
-        const server_data = await this.slot.getLiveData();
+        const server_data = await this.slot.getServerStatus();
         if(server_data != null){
             return server_data.version.name;
         }
@@ -216,7 +210,7 @@ class Server {
     }
 
     async getPlayerList(){
-        const server_data = await this.slot.getLiveData();
+        const server_data = await this.slot.getServerStatus();
         if(server_data != null){
             return server_data.players.online > 0 ? server_data.players.sample.map(e => e.name) : [];
         }

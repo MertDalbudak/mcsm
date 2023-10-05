@@ -1,9 +1,12 @@
 const fs = require('fs').promises;
 const Event = require('events');
 const {exec, spawn} = require('child_process');
+const util = require('node:util');
+exec.__promise__ = util.promisify(exec);
 const config = require('./config.json').Slot;
-const util = require('minecraft-server-util');
+const McUtil = require('minecraft-server-util');
 const Server = require('./Server/Server');
+const path = require('path');
 
 class Slot{
     constructor(server_id){
@@ -14,36 +17,39 @@ class Slot{
 
         this.event = new Event();
         this.status = "not running";
-        this.daemon_status = "not running";
         this.suspend_mc_start = false;
 
         this.server = null;
-
         if(server_id){
             this.startServer(server_id, (error, response)=>{
                 if(error){
                     console.error(error.toString());
                 }
+                this.event.emit('ready');
             });
         }
         else{
             // CHECK IF AN SERVER IS ALIVE IN SLOT
-            this.getLiveData().then(async (data) => {
-                if(data){
-                    const id = await Server.findIdByMotd(data.motd.clean);
-                    if(isNaN(id) == false){
-                        this.assignServer(id);
-                    }
+            this.getLiveServer().then(async (data) => {
+                console.log(data);
+                if(data != null){
+                    this.assignServer(data.id);
                 }
+                this.event.emit('ready');
             });
         }
-        this.event.emit('ready');
     }
 
-    async getLiveData(){
+    /**
+     * 
+     * @param {String} host 
+     * @param {Number} port 
+     * @returns
+     */
+    async getServerStatus(host = 'localhost', port = this.config.port){
         let data = null;
         try{
-            data = await util.status('localhost', this.port, {'timeout': 800});
+            data = await McUtil.status(host, port, {'timeout': 500});
         }
         catch(error){
             console.log("No server is running currently")
@@ -54,12 +60,42 @@ class Slot{
         }
     }
 
+    /**
+     * @returns {ServerData|null}
+     */
+    async getLiveServer(){
+        let available_servers = await Server.available_servers;
+        for(let i = 0; i < available_servers.length; i++){
+            try{
+                const level_name = available_servers[i].properties.match(/level-name=(.)+/g)[0].split('=')[1].trim();
+                const session_lock_file = path.join(available_servers[i].path, level_name, 'session.lock');
+                console.log(session_lock_file);
+                const {stderr, stdout} = await exec.__promise__(`lsof -n ${session_lock_file}`);
+                console.log('error ' + stderr, 'output ' + stdout);
+                if(stderr == "" && stdout != ""){
+                    this.event.emit('started');
+                    return available_servers[i];
+                }
+            }
+            catch(error){
+                console.error(error.toString());
+            }
+        }
+        switch(this.status){
+            case "running":
+                this.event.emit('stopped');
+                break;
+        }
+        this.status = "not running";
+        return null;
+    }
+
     async assignServer(server_id){
-        const server_config = (await Server.available_servers).find(e => e.id == server_id);
-        if(server_config == undefined){
+        const server_data = (await Server.available_servers).find(e => e.id == server_id);
+        if(server_data == undefined){
             throw new Error(`No server with given id ${server_id} found.`);
         }
-        const _Server = require(`./Server/${server_config.type}`);
+        const _Server = require(`./Server/${server_data.type}`);
         this.server = new _Server(server_id);
         this.server.slot = this;
         await (new Promise((res) => {
@@ -67,61 +103,13 @@ class Slot{
                 await this.server.setPort(this.port);
                 this.status = "running";
                 this.event.emit('serverAssigned', this.server);
-                this.checkDaemon();
+                this.getServerStatus();
                 res();
             });
+
         }));
     }
 
-    checkDaemon(callback){
-        exec(`if screen -ls | grep -q '${this.server.bin}'; then echo 1; else echo 0; fi`,  (err, stdout, stderr)=>{
-            console.log("Server Manager Status: " + this.status);
-            if(stdout == 0){
-                this.daemon_status = "not running";
-                if(this.status == "running"){
-                    this.status = "not running";
-                    //console.error("Minecraft server is not running anymore", "Exiting...");
-                    //process.exit();
-                }
-                else{
-                    switch(this.status){
-                        case "restarting":
-                            this.status = "restart closed";
-                            this.event.emit("restartClosed");
-                            break;
-                        case "updating":
-                            this.status = "update downloading";
-                            this.event.emit("updateClosed");
-                            break;
-                    }
-                }
-            }
-            else{
-                this.daemon_status = "running";
-                switch(this.status){
-                    case "not running":
-                        this.status = "running";
-                        break;
-                    case "starting":
-                        this.event.emit('serverStarted');
-                        this.status = "running";
-                        break;
-                    case "restart closed":
-                        this.event.emit("restartComplete");
-                        this.status = "running";
-                        break;
-                    case "update installed":
-                        this.event.emit("updateComplete");
-                        this.status = "running";
-                        break;
-                }
-            }
-            if(callback){
-                callback(stdout != 0);
-            }
-        });
-
-    }
     async startServer(id, callback){
         if(this.status == "restart" || this.status == "restarting" || this.status == "starting"){
             callback("An start up or restart is already in process.", {})
@@ -172,6 +160,7 @@ class Slot{
             this.suspendServerStart();  // SUSPEND SLOT SERVER START
             await this.assignServer(id);    // ASSIGN SERVER TO THIS SLOT
             // TRY STARTING THE SERVER
+            console.log(`${process.env.ROOT}/bin/start.sh -p ${this.server.path}`);
             const mc_server_spawn = spawn('sh', [`${process.env.ROOT}/bin/start.sh`, `-p ${this.server.path}`], spawn_options);
             mc_server_spawn.unref();
             this.server.discord.on('ready', ()=>{
@@ -234,13 +223,10 @@ class Slot{
     get ops() {
         return require(`${this.server.path}/ops.json`).map(e => e.name);
     }
-    get daemon_status (){
-        return daemon_status;
-    }
     async report(){
         let server = null;
         if(this.server){
-            server = await this.getLiveData();
+            server = await this.getServerStatus();
             if(server != null){
                 server.id = this.server.id;
             }
@@ -257,14 +243,9 @@ class Slot{
         }
     }
     // SETTER
-    set daemon_status(status){
-        daemon_status = status;
-        this.event.emit('daemonStatusChange', status);
-    }
 }
 
 // PRIVATE VAR
-let daemon_status = "";
 let suspend_server_start = false;
 
 module.exports = Slot;

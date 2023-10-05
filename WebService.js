@@ -32,7 +32,7 @@ class WebService {
                 }
             });
             socket.on('end', function() {
-                console.log('server disconnected');
+                console.log('Web Socket disconnected');
             });
         });
     }
