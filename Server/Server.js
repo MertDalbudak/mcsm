@@ -1,6 +1,4 @@
-const fs = require('fs').promises;
-fs.watchFile = require('fs').watchFile; // USE CALLBACK watchFile
-fs.unwatchFile = require('fs').unwatchFile; // USE CALLBACK unwatchFile
+const fs = require('fs/promises');
 
 const Event = require('events');
 const {get} = require('https');
@@ -73,6 +71,8 @@ class Server {
             this.banned_ips_path = this.path + banned_ips_path;
             this.banned_players_path = this.path + banned_players_path;
 
+            this.ac = new AbortController();
+
             let eventListener = this.config.eventListener;
             for(let i = 0; i < eventListener.length; i++){
                 this[eventListener[i]].bind(this)();
@@ -87,10 +87,22 @@ class Server {
         this.banned_ips = fs.readFile(this.banned_ips_path, {'encoding': 'utf-8'});
         this.banned_players = fs.readFile(this.banned_players_path, {'encoding': 'utf-8'});
 
+
         // Watch change of logs
-        fs.watchFile(this.logPath, { 'persistent': true,  'interval': config.logCheckInterval}, (eventType, filename) => {
-            this.event.emit("logChange", filename);
-        });
+        (async () => {
+            try{
+                const watcher = fs.watch(this.logPath, { 'persistent': false , signal: this.ac.signal });
+                for await(const event of watcher){
+                    console.log(event);
+                    if(event.eventType == 'change'){
+                        this.event.emit("logChange");
+                    }
+                }
+            }
+            catch(error){
+                console.error(error);
+            }
+        })();
 
         this.on('logChange', ()=>{
             this.logLastLines(1, (line)=>{
@@ -109,33 +121,62 @@ class Server {
             this.banned_players = await this.banned_players;
 
             // Watch change of ops
-            fs.watchFile(this.ops_path, { 'persistent': true,  'interval': WATCH_FILE_INTERVAL}, (eventType, filename) => {
-                this.event.emit("opsChange", filename);
-                fs.readFile(this.ops_path, {'encoding': 'utf-8'}).then((data)=>{
-                    this.event.emit("opsChange", {'current': this.ops, 'new': data});
-                    this.ops = data;
-                    this.event.emit("opsChanged", filename);
-                });
-            });
+            (async () => {
+                try{
+                    const watcher = fs.watch(this.whitelist_path, { 'persistent': false , signal: this.ac.signal });
+                    for await(const event of watcher){
+                        console.log(event);
+                        if(event.eventType == 'change'){
+                            fs.readFile(this.ops_path, {'encoding': 'utf-8'}).then((data)=>{
+                                this.event.emit("opsChange", {'current': this.ops, 'new': data});
+                                this.ops = data;
+                                this.event.emit("opsChanged");
+                            });
+                        }
+                    }
+                }catch(error){
+                    console.error(error);
+                }
+            })();
 
             // Watch change of whitelist
-            fs.watchFile(this.whitelist_path, { 'persistent': true,  'interval': WATCH_FILE_INTERVAL}, (eventType, filename) => {
-                fs.readFile(this.whitelist_path, {'encoding': 'utf-8'}).then((data)=>{
-                    this.event.emit("whitelistChange", {'current': this.banned_players, 'new': data});
-                    this.whitelist = data;
-                    this.event.emit("whitelistChanged", filename);
-                });
-            });
-
+            (async () => {
+                try{
+                    const watcher = fs.watch(this.whitelist_path, { 'persistent': false , signal: this.ac.signal });
+                    for await(const event of watcher){
+                        console.log(event);
+                        if(event.eventType == 'change'){
+                            fs.readFile(this.whitelist_path, {'encoding': 'utf-8'}).then((data)=>{
+                                this.event.emit("whitelistChange", {'current': this.banned_players, 'new': data});
+                                this.whitelist = data;
+                                this.event.emit("whitelistChanged");
+                            });
+                        }
+                    }
+                }catch(error){
+                    console.error(error);
+                }
+            })();
+            
             // Watch change of banned players
-            fs.watchFile(this.banned_players_path, { 'persistent': true,  'interval': WATCH_FILE_INTERVAL}, (eventType, filename) => {
-                fs.readFile(this.banned_players_path, {'encoding': 'utf-8'}).then((data)=>{
-                    this.event.emit("bannedPlayersChange", {'current': this.banned_players, 'new': data});
-                    this.banned_players = data;
-                    this.event.emit("bannedPlayersChanged", filename);
-                })
-            });
-
+            (async () => {
+                try{
+                    const watcher = fs.watch(this.banned_players_path, { 'persistent': false , signal: this.ac.signal });
+                    for await(const event of watcher){
+                        console.log(event);
+                        if(event.eventType == 'change'){
+                            fs.readFile(this.banned_players_path, {'encoding': 'utf-8'}).then((data)=>{
+                                this.event.emit("bannedPlayersChange", {'current': this.banned_players, 'new': data});
+                                this.banned_players = data;
+                                this.event.emit("bannedPlayersChanged");
+                            });
+                        }
+                    }
+                }catch(error){
+                    console.error(error);
+                }
+            })();
+                
             this.event.emit('ready');
         })
     }
@@ -449,11 +490,7 @@ class Server {
         if(this.discord){
             this.discord.logout();
             this.discord = null;
-            fs.unwatchFile(this.logPath);
-            fs.unwatchFile(this.ops_path);
-            fs.unwatchFile(this.whitelist_path);
-            fs.unwatchFile(this.banned_ips_path);
-            fs.unwatchFile(this.banned_players_path);
+            this.ac.abort();
         }
     }
 
