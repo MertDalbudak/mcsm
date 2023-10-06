@@ -1,5 +1,6 @@
 const fs = require('fs').promises;
-fs.watchFile = require('fs').watchFile; // USE CALLBACK watch_file
+fs.watchFile = require('fs').watchFile; // USE CALLBACK watchFile
+fs.unwatchFile = require('fs').unwatchFile; // USE CALLBACK unwatchFile
 
 const Event = require('events');
 const {get} = require('https');
@@ -14,6 +15,8 @@ const ops_path = "/ops.json";
 const whitelist_path = "/whitelist.json";
 const banned_ips_path = "/banned-ips.json";
 const banned_players_path = "/banned-players.json";
+
+const WATCH_FILE_INTERVAL = 1000; // 1 second
 
 
 // LOAD RESOURCES
@@ -106,7 +109,7 @@ class Server {
             this.banned_players = await this.banned_players;
 
             // Watch change of ops
-            fs.watchFile(this.ops_path, { 'persistent': true,  'interval': config.logCheckInterval}, (eventType, filename) => {
+            fs.watchFile(this.ops_path, { 'persistent': true,  'interval': WATCH_FILE_INTERVAL}, (eventType, filename) => {
                 this.event.emit("opsChange", filename);
                 fs.readFile(this.ops_path, {'encoding': 'utf-8'}).then((data)=>{
                     this.event.emit("opsChange", {'current': this.ops, 'new': data});
@@ -116,7 +119,7 @@ class Server {
             });
 
             // Watch change of whitelist
-            fs.watchFile(this.whitelist_path, { 'persistent': true,  'interval': config.logCheckInterval}, (eventType, filename) => {
+            fs.watchFile(this.whitelist_path, { 'persistent': true,  'interval': WATCH_FILE_INTERVAL}, (eventType, filename) => {
                 fs.readFile(this.whitelist_path, {'encoding': 'utf-8'}).then((data)=>{
                     this.event.emit("whitelistChange", {'current': this.banned_players, 'new': data});
                     this.whitelist = data;
@@ -125,7 +128,7 @@ class Server {
             });
 
             // Watch change of banned players
-            fs.watchFile(this.banned_players_path, { 'persistent': true,  'interval': config.logCheckInterval}, (eventType, filename) => {
+            fs.watchFile(this.banned_players_path, { 'persistent': true,  'interval': WATCH_FILE_INTERVAL}, (eventType, filename) => {
                 fs.readFile(this.banned_players_path, {'encoding': 'utf-8'}).then((data)=>{
                     this.event.emit("bannedPlayersChange", {'current': this.banned_players, 'new': data});
                     this.banned_players = data;
@@ -446,6 +449,11 @@ class Server {
         if(this.discord){
             this.discord.logout();
             this.discord = null;
+            fs.unwatchFile(this.logPath);
+            fs.unwatchFile(this.ops_path);
+            fs.unwatchFile(this.whitelist_path);
+            fs.unwatchFile(this.banned_ips_path);
+            fs.unwatchFile(this.banned_players_path);
         }
     }
 

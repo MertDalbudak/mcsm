@@ -18,7 +18,7 @@
         "path": [
             
         ],
-        "logCheckInterval": 20,
+        "logCheckInterval": 150,
         "restartInterval": "0 */4 * * *",
         "checkUpdateInterval": "0 */12 * * *"
     },

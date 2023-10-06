@@ -118,7 +118,7 @@ const slot_id = () => new Promise((res, rej) => {
             rej("Input must be numeric");
         }
         else{
-            config.Slot.id = id || config_default.Slot.id;
+            config.Slot.id = parse(id) || config_default.Slot.id;
             res();
         }
     });
@@ -155,7 +155,7 @@ const slot_port = () => new Promise((res, rej) => {
             rej("Input must be numeric");
         }
         else{
-            config.Slot.port = port || config_default.Slot.port;
+            config.Slot.port = parseInt(port) || config_default.Slot.port;
             res();
         }
     });
@@ -229,7 +229,7 @@ const api_port = () => new Promise((res, rej) => {
             rej("Input must be numeric");
         }
         else{
-            config.MCSM_API_PORT = port || config_default.MCSM_API_PORT;
+            config.MCSM_API_PORT = parseInt(port) || config_default.MCSM_API_PORT;
             res();
         }
     });
@@ -254,7 +254,7 @@ const server_log_check_interval = () => new Promise((res, rej) => {
             rej("Input must be numeric");
         }
         else{
-            config.Server.logCheckInterval = interval || default_value;
+            config.Server.logCheckInterval = parseInt(interval) || default_value;
             res();
         }
     });

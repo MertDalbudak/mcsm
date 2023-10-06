@@ -80,6 +80,7 @@ class Slot{
         }
         switch(this.status){
             case "running":
+                this.server.die();
                 this.event.emit('stopped');
                 break;
         }
