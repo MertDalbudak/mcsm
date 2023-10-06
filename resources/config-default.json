@@ -12,7 +12,8 @@
         "name": "The sloth slot",
         "domain": "mc.dalbudak.de",
         "port": 25565,
-        "srvRecord": false
+        "srvRecord": false,
+        "localPort": 25565
     },
     "Server":{
         "path": [

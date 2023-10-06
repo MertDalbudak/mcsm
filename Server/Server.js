@@ -2,7 +2,8 @@ const fs = require('fs/promises');
 
 const Event = require('events');
 const {get} = require('https');
-const {exec, execSync} = require('child_process');
+const path = require('path');
+const {exec, execSync, spawn} = require('child_process');
 const CronJob = require('cron').CronJob;
 const config = require('../config.json').Server;
 
@@ -13,9 +14,6 @@ const ops_path = "/ops.json";
 const whitelist_path = "/whitelist.json";
 const banned_ips_path = "/banned-ips.json";
 const banned_players_path = "/banned-players.json";
-
-const WATCH_FILE_INTERVAL = 1000; // 1 second
-
 
 // LOAD RESOURCES
 const death_messages = require('../resources/death_messages.json');
@@ -64,45 +62,92 @@ class Server {
 
             this.properties = this.config.properties;
 
-            this.path = this.config.path;
-            this.logPath = this.path + this.config.logPath;
-            this.ops_path = this.path + ops_path;
-            this.whitelist_path = this.path + whitelist_path;
-            this.banned_ips_path = this.path + banned_ips_path;
-            this.banned_players_path = this.path + banned_players_path;
-
-            this.ac = new AbortController();
-
             let eventListener = this.config.eventListener;
             for(let i = 0; i < eventListener.length; i++){
                 this[eventListener[i]].bind(this)();
             }
-
-            this.init();
+            this.event.emit('ready');
         });
     }
     async init(){
-        this.ops = fs.readFile(this.path + ops_path, {'encoding': 'utf-8'});
-        this.whitelist = fs.readFile(this.whitelist_path, {'encoding': 'utf-8'});
-        this.banned_ips = fs.readFile(this.banned_ips_path, {'encoding': 'utf-8'});
-        this.banned_players = fs.readFile(this.banned_players_path, {'encoding': 'utf-8'});
-
+        this.ac = new AbortController();
 
         // Watch change of logs
-        (async () => {
+        this.watchFile(this.logPath, this.ac.signal, (event)=>{
+            if(event.eventType == 'change'){
+                this.event.emit("logChange");
+            }
+        });
+
+        // OPs
+        fs.readFile(this.ops_path, {'encoding': 'utf-8'}).then((data)=>{
             try{
-                const watcher = fs.watch(this.logPath, { 'persistent': false , signal: this.ac.signal });
-                for await(const event of watcher){
-                    console.log(event);
+                this.ops = JSON.parse(data);
+                // Watch change of ops
+                this.watchFile(this.ops_path, this.ac.signal, (event)=> {
                     if(event.eventType == 'change'){
-                        this.event.emit("logChange");
+                        fs.readFile(this.ops_path, {'encoding': 'utf-8'}).then((data)=>{
+                            this.event.emit("opsChange", {'current': this.ops, 'new': data});
+                            this.ops = data;
+                            this.event.emit("opsChanged");
+                        });
                     }
-                }
+                });
             }
             catch(error){
                 console.error(error);
             }
-        })();
+        });
+
+        // WHITELIST
+        fs.readFile(this.whitelist_path, {'encoding': 'utf-8'}).then((data)=>{
+            try{
+                this.whitelist = JSON.parse(data);
+                // Watch change of whitelist
+                this.watchFile(this.whitelist_path, this.ac.signal, (event)=> {
+                    if(event.eventType == 'change'){
+                        fs.readFile(this.whitelist_path, {'encoding': 'utf-8'}).then((data)=>{
+                            this.event.emit("whitelistChange", {'current': this.banned_players, 'new': data});
+                            this.whitelist = data;
+                            this.event.emit("whitelistChanged");
+                        });
+                    }
+                });
+            }
+            catch(error){
+                console.error(error);
+            }
+        });
+
+        // BANNED IPs
+        fs.readFile(this.banned_ips_path, {'encoding': 'utf-8'}).then((data)=>{
+            try{
+                this.banned_ips = JSON.parse(data);
+            }
+            catch(error){
+                console.error(error);
+            }
+        });
+
+        // BANNED PLAYERS
+        fs.readFile(this.banned_players_path, {'encoding': 'utf-8'}).then((data)=>{
+            try{
+                this.banned_players = JSON.parse(data);
+                // Watch change of banned players
+                this.watchFile(this.banned_players_path, this.ac.signal, (event)=> {
+                    if(event.eventType == 'change'){
+                        fs.readFile(this.banned_players_path, {'encoding': 'utf-8'}).then((data)=>{
+                            this.event.emit("bannedPlayersChange", {'current': this.banned_players, 'new': data});
+                            this.banned_players = data;
+                            this.event.emit("bannedPlayersChanged");
+                        });
+                    }
+                });
+            }
+            catch(error){
+                console.error(error);
+            }
+        });
 
         this.on('logChange', ()=>{
             this.logLastLines(1, (line)=>{
@@ -113,72 +158,6 @@ class Server {
                 }
             });
         });
-
-        Promise.all([this.ops, this.whitelist, this.banned_ips, this.banned_players]).then(async()=>{
-            this.ops = await this.ops;
-            this.whitelist = await this.whitelist;
-            this.banned_ips = await this.banned_ips;
-            this.banned_players = await this.banned_players;
-
-            // Watch change of ops
-            (async () => {
-                try{
-                    const watcher = fs.watch(this.whitelist_path, { 'persistent': false , signal: this.ac.signal });
-                    for await(const event of watcher){
-                        console.log(event);
-                        if(event.eventType == 'change'){
-                            fs.readFile(this.ops_path, {'encoding': 'utf-8'}).then((data)=>{
-                                this.event.emit("opsChange", {'current': this.ops, 'new': data});
-                                this.ops = data;
-                                this.event.emit("opsChanged");
-                            });
-                        }
-                    }
-                }catch(error){
-                    console.error(error);
-                }
-            })();
-
-            // Watch change of whitelist
-            (async () => {
-                try{
-                    const watcher = fs.watch(this.whitelist_path, { 'persistent': false , signal: this.ac.signal });
-                    for await(const event of watcher){
-                        console.log(event);
-                        if(event.eventType == 'change'){
-                            fs.readFile(this.whitelist_path, {'encoding': 'utf-8'}).then((data)=>{
-                                this.event.emit("whitelistChange", {'current': this.banned_players, 'new': data});
-                                this.whitelist = data;
-                                this.event.emit("whitelistChanged");
-                            });
-                        }
-                    }
-                }catch(error){
-                    console.error(error);
-                }
-            })();
-            
-            // Watch change of banned players
-            (async () => {
-                try{
-                    const watcher = fs.watch(this.banned_players_path, { 'persistent': false , signal: this.ac.signal });
-                    for await(const event of watcher){
-                        console.log(event);
-                        if(event.eventType == 'change'){
-                            fs.readFile(this.banned_players_path, {'encoding': 'utf-8'}).then((data)=>{
-                                this.event.emit("bannedPlayersChange", {'current': this.banned_players, 'new': data});
-                                this.banned_players = data;
-                                this.event.emit("bannedPlayersChanged");
-                            });
-                        }
-                    }
-                }catch(error){
-                    console.error(error);
-                }
-            })();
-                
-            this.event.emit('ready');
-        })
     }
     fileReadLastLines(path, n, callback){
         exec(`tail -n ${n} ${path}`, function(err, stdout, stderr){
@@ -231,13 +210,52 @@ class Server {
             this.handler.stop(30000, 5000, false, false).then(()=>{
                 this.slot.once('stopped', (event)=>{
                     console.log("restart closed", "starting...");
-                    this.startServer(()=>{
+                    this.start(()=>{
                         this.event.emit('restarted');
                     });
                 });
             })
         }, null, true, 'Europe/Berlin');
         this.restart_cron.start();
+    }
+
+    start(){
+        const spawn_options = {
+            slient: true,
+            detached: true,
+            stdio: 'ignore',
+            shell: false,
+            windowsHide: true
+        }
+        try{
+            const mc_server_spawn = spawn('sh', [`${process.env.ROOT}/bin/start.sh`, `-p ${this.path}`], spawn_options);
+            mc_server_spawn.unref();
+            this.discord.send(`The Minecraft server thats linked to this channel has started. You might be able to join the server in a minute.`);
+            setTimeout(()=> this.init(), 5000);
+        }catch(error){
+            console.error(error.toString());
+        }
+    }
+
+    /**
+     * Error parameter becomes null if there are no errors
+     * @callback errorHandling
+     * @param {String|null} error
+    */
+
+    /**
+     * Starts the server
+     * @param {errorHandling} callback
+     */
+    stop(callback){
+        this.handler.say("Server will stop");
+        this.handler.stop(0, false, false, false).then(()=>{
+            this.discord.send(`The Minecraft server thats linked to this channel will be stopped`);
+            this.die();
+            callback(null);
+        }, (error)=>{
+            callback(error);
+        });
     }
     
     updateCron(){
@@ -412,7 +430,7 @@ class Server {
                             fs.renameSync(output_file, this.path + this.ServerExecutable);
                             this.status = "update installed";
                             this.handler.emit("updateInstalled");
-                            this.startServer();
+                            this.start();
                         });
                     });
                 }
@@ -458,6 +476,24 @@ class Server {
         });
     }
 
+    async watchFile(watch_path, abort_signal, callback){
+        try{
+            const watcher = fs.watch(watch_path, { 'persistent': false , 'signal': abort_signal });
+            for await(const event of watcher){
+                console.log(event);
+                callback(event);
+            }
+        }
+        catch(error){
+            if(error.code == 'ABORT_ERR'){
+                console.log(`Watch on ${watch_path} ended`);
+            }
+            else{
+                console.error(error);
+            }
+        }
+    }
+
 
     /**
      * 
@@ -490,13 +526,33 @@ class Server {
         if(this.discord){
             this.discord.logout();
             this.discord = null;
-            this.ac.abort();
         }
+        this.ac.abort();
+        this.slot.server = null;
+        this.slot = null;
     }
 
     // GETTER
     get currentPlayerCount(){
-        return this.currentPlayerCount.length();
+        return this.getPlayerList().length();
+    }
+    get path() {
+        return this.config.path;
+    };
+    get logPath (){
+        return path.join(this.path, this.config.logPath);
+    }
+    get ops_path (){
+        return path.join(this.path, ops_path);
+    }
+    get whitelist_path (){
+        return path.join(this.path, whitelist_path);
+    }
+    get banned_ips_path (){
+        return path.join(this.path, banned_ips_path);
+    }
+    get banned_players_path (){
+        return path.join(this.path, banned_players_path);
     }
 }
 

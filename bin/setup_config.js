@@ -88,6 +88,7 @@ async function config_questionaire(){
     await ask(slot_host);
     await ask(slot_port);
     await ask(slot_srv);
+    await ask(local_port);
     await ask(backup_path);
     await ask(web_api);
     await ask(server_log_check_interval);
@@ -148,9 +149,8 @@ const slot_host = () => new Promise((res, rej) => {
     });
 });
 
-
 const slot_port = () => new Promise((res, rej) => {
-    rl.question(`Specify a slot port (default: ${config_default.Slot.port}): `, port =>{
+    rl.question(`Specify a slot port which will be exposed (default: ${config_default.Slot.port}): `, port =>{
         if(isNaN(port)){
             rej("Input must be numeric");
         }
@@ -177,6 +177,18 @@ const slot_srv = () => new Promise((res, rej) => {
                 return;
         }
         res();
+    });
+});
+
+const local_port = () => new Promise((res, rej) => {
+    rl.question(`Specify the local port (default: ${config_default.Slot.localPort}): `, port =>{
+        if(isNaN(port)){
+            rej("Input must be numeric");
+        }
+        else{
+            config.Slot.localPort = parseInt(port) || config_default.Slot.localPort;
+            res();
+        }
     });
 });
 

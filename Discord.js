@@ -49,6 +49,8 @@ module.exports = class{
         this.guilds = [];
         this.connected = false;
 
+        this.sendQueue = [];
+
         this.login();
     }
 
@@ -62,11 +64,14 @@ module.exports = class{
             ]
         });
         const login = await this.client.login(this.config.token).catch(error => {
-            console.error(error);
+            console.error(error.toString());
         });
         if(!login){
             console.error("\n\nDISCORD SERVICE IS NOT AVAILABLE\n\n");
             return false;
+        }
+        else{
+            console.log("\n\nDISCORD SERVICE AVAILABLE\n\n")
         }
         this.client.commands = new Collection();
         this.client.on('ready', ()=> {
@@ -79,6 +84,8 @@ module.exports = class{
             });
             this.connected = true;
             this.event.emit('ready');
+
+            this.sendQueue.forEach(e => this.send(e.msg, e.index));
         });
         this.registerIntervalId = setInterval(()=>{
             this.rest.put(
@@ -111,6 +118,7 @@ module.exports = class{
             return true;
         }
         catch(error){
+            this.sendQueue.push({'msg': msg, 'index': index});
             console.error(error);
             return false;
         }
@@ -249,7 +257,8 @@ module.exports = class{
     }
     logout(){
         clearInterval(this.registerIntervalId);
-        this.client.destroy()
+        this.client.destroy();
+        this.connected = false;
     }
     /**
      * 
