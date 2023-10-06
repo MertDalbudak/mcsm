@@ -1,6 +1,6 @@
 const fs = require('fs').promises;
 const Event = require('events');
-const {exec, spawn} = require('child_process');
+const {exec} = require('child_process');
 const util = require('node:util');
 exec.__promise__ = util.promisify(exec);
 const config = require('./config.json').Slot;
@@ -19,6 +19,9 @@ class Slot{
         this.status = "not running";
         this.suspend_mc_start = false;
 
+        /**
+         * @type {Server}
+         */
         this.server = null;
         if(server_id){
             this.startServer(server_id, (error, response)=>{
@@ -32,7 +35,8 @@ class Slot{
             // CHECK IF AN SERVER IS ALIVE IN SLOT
             this.getLiveServer().then(async (data) => {
                 if(data != null){
-                    this.assignServer(data.id);
+                    await this.assignServer(data.id);
+                    this.server.init();
                 }
                 this.event.emit('ready');
             });
@@ -45,12 +49,15 @@ class Slot{
      * @param {Number} port 
      * @returns
      */
-    async getServerStatus(host = 'localhost', port = this.config.port){
+    async getServerStatus(host = 'localhost', port = this.config.localPort){
         let data = null;
         try{
             data = await McUtil.status(host, port, {'timeout': 500});
         }
         catch(error){
+            if(this.server){
+                this.server.die();
+            }
             console.log("No server is running currently")
             // console.error(error);
         }
@@ -70,7 +77,8 @@ class Slot{
                 const session_lock_file = path.join(available_servers[i].path, level_name, 'session.lock');
                 const {stderr, stdout} = await exec.__promise__(`lsof -n ${session_lock_file}`);
                 if(stderr == "" && stdout != ""){
-                    this.event.emit('started');
+                    if(this.status == "not running")
+                        this.event.emit('started');
                     return available_servers[i];
                 }
             }
@@ -80,9 +88,11 @@ class Slot{
         }
         switch(this.status){
             case "running":
-                this.server.die();
                 this.event.emit('stopped');
                 break;
+        }
+        if(this.server){
+            this.server.die();
         }
         this.status = "not running";
         return null;
@@ -98,13 +108,11 @@ class Slot{
         this.server.slot = this;
         await (new Promise((res) => {
             this.server.on('ready', async ()=>{
-                await this.server.setPort(this.config.port);
-                this.status = "running";
-                this.event.emit('serverAssigned', this.server);
+                await this.server.setPort(this.config.localPort);
+                this.event.emit('serverAssigned');
                 this.getServerStatus();
                 res();
             });
-
         }));
     }
 
@@ -113,22 +121,13 @@ class Slot{
             callback("An start up or restart is already in process.", {})
             return;
         }
-        const spawn_options = {
-            slient: true,
-            detached: true,
-            stdio: 'ignore',
-            shell: false,
-            windowsHide: true
-        }
+        
         if(this.server != null){
             this.status = "restart";
             this.event.emit('restart');
             try{
                 await (new Promise((resolve, reject)=>{
                     this.stopServer((error, data)=>{
-                        if(this.server.discord){
-                            this.server.discord.send(`The Minecraft server thats linked to this channel stopped`);
-                        }
                         if(error){
                             reject([error, data]);
                         }
@@ -158,11 +157,7 @@ class Slot{
             this.suspendServerStart();  // SUSPEND SLOT SERVER START
             await this.assignServer(id);    // ASSIGN SERVER TO THIS SLOT
             // TRY STARTING THE SERVER
-            const mc_server_spawn = spawn('sh', [`${process.env.ROOT}/bin/start.sh`, `-p ${this.server.path}`], spawn_options);
-            mc_server_spawn.unref();
-            this.server.discord.on('ready', ()=>{
-                this.server.discord.send(`The Minecraft server thats linked to this channel has started. You might be able to join the server in a minute.`);
-            });
+            this.server.start(); 
             
             callback(null, {'message': "Server has been started."});
         }
@@ -173,30 +168,15 @@ class Slot{
     }
 
     stopServer(callback){
-        this.server.handler.say("Server will stop");
-        this.server.handler.stop(0, false, false, false).then(()=>{
-            if(this.server.discord){
-                this.server.discord.send(`The Minecraft server thats linked to this channel will be stopped`).then(()=>{
-                    this.server.die();
-                    this.server = null;
-                });
+        this.server.stop((error)=>{
+            if(error){
+                callback(error, {'message': "An error occured"});
             }
             else{
-                this.server = null;
+                this.status = "not running";
+                this.event.emit('stopped');
+                callback(null, {'message': "Server has been stopped"});
             }
-            switch(this.status){
-                case "restart":
-                    this.status = "restarting";
-                    this.event.emit("restarting");
-                    break;
-                case "running":
-                default:
-                    this.status = "not running";
-                    break;
-            }
-            callback(null, {'message': "Server has been stopped"});
-        }, (error)=>{
-            callback(error, {'message': "An error occured"});
         });
     }
 
