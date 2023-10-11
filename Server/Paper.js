@@ -3,12 +3,12 @@ const fs = require('fs/promises')
 const Server = require('./Server');
 
 
-class Paper extends Server {
+class Paper extends Server { 
     constructor(id){
         super(id);
-        this.ServerExecutable ="/paper.jar";
-        this.ServerUpdateHost = "papermc.io";
-        this.ServerUpdatePath = "/api/v1/paper/1.19.3/latest/download";
+        super.ServerExecutable = "/paper.jar";
+        super.ServerUpdateHost = "papermc.io";
+        super.ServerUpdatePath = "/api/v1/paper/1.19.3/latest/download";
     }
     newVersionAvailable(){
         console.log("Checking for paper updates...");

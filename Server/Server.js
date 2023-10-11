@@ -14,6 +14,7 @@ const ops_path = "/ops.json";
 const whitelist_path = "/whitelist.json";
 const banned_ips_path = "/banned-ips.json";
 const banned_players_path = "/banned-players.json";
+const mcsm_plugin_path = "/plugins/mcsm";
 
 // LOAD RESOURCES
 const death_messages = require('../resources/death_messages.json');
@@ -21,18 +22,21 @@ const blacklist_words = require('../resources/blacklist-words.json');
 const blacklist_words_regex = blacklist_words.join('|');
 
 class Server {
+    #event;
+    #isLive;
+
+    #ServerExecutable;
+    #ServerUpdateHost;
+    #ServerUpdatePath;
+
     /**
      * 
      * @param {Number} id 
      */
     constructor(id){
         this.id = id;
-
-        this.event = new Event();
-
-        this.ServerExecutable;
-        this.ServerUpdateHost;
-        this.ServerUpdatePath;
+        this.#isLive = false;
+        this.#event = new Event();
 
         this.update_permission_requested = false;
 
@@ -66,8 +70,9 @@ class Server {
             for(let i = 0; i < eventListener.length; i++){
                 this[eventListener[i]].bind(this)();
             }
-            this.event.emit('ready');
+            this.#event.emit('ready');
         });
+        this.once('started', ()=> this.#isLive = true);
     }
     async init(){
         this.ac = new AbortController();
@@ -75,7 +80,7 @@ class Server {
         // Watch change of logs
         this.watchFile(this.logPath, this.ac.signal, (event)=>{
             if(event.eventType == 'change'){
-                this.event.emit("logChange");
+                this.#event.emit("logChange");
             }
         });
 
@@ -87,9 +92,9 @@ class Server {
                 this.watchFile(this.ops_path, this.ac.signal, (event)=> {
                     if(event.eventType == 'change'){
                         fs.readFile(this.ops_path, {'encoding': 'utf-8'}).then((data)=>{
-                            this.event.emit("opsChange", {'current': this.ops, 'new': data});
+                            this.#event.emit("opsChange", {'current': this.ops, 'new': data});
                             this.ops = data;
-                            this.event.emit("opsChanged");
+                            this.#event.emit("opsChanged");
                         });
                     }
                 });
@@ -107,9 +112,9 @@ class Server {
                 this.watchFile(this.whitelist_path, this.ac.signal, (event)=> {
                     if(event.eventType == 'change'){
                         fs.readFile(this.whitelist_path, {'encoding': 'utf-8'}).then((data)=>{
-                            this.event.emit("whitelistChange", {'current': this.banned_players, 'new': data});
+                            this.#event.emit("whitelistChange", {'current': this.banned_players, 'new': data});
                             this.whitelist = data;
-                            this.event.emit("whitelistChanged");
+                            this.#event.emit("whitelistChanged");
                         });
                     }
                 });
@@ -137,9 +142,9 @@ class Server {
                 this.watchFile(this.banned_players_path, this.ac.signal, (event)=> {
                     if(event.eventType == 'change'){
                         fs.readFile(this.banned_players_path, {'encoding': 'utf-8'}).then((data)=>{
-                            this.event.emit("bannedPlayersChange", {'current': this.banned_players, 'new': data});
+                            this.#event.emit("bannedPlayersChange", {'current': this.banned_players, 'new': data});
                             this.banned_players = data;
-                            this.event.emit("bannedPlayersChanged");
+                            this.#event.emit("bannedPlayersChanged");
                         });
                     }
                 });
@@ -154,10 +159,12 @@ class Server {
                 console.log(line);
                 let parsed_line = this.parseLine(line);
                 if(parsed_line != null){
-                    this.event.emit("newLogLine", parsed_line);
+                    this.#event.emit("newLogLine", parsed_line);
                 }
             });
         });
+
+        this.#event.emit('started');
     }
     fileReadLastLines(path, n, callback){
         exec(`tail -n ${n} ${path}`, function(err, stdout, stderr){
@@ -211,7 +218,7 @@ class Server {
                 this.slot.once('stopped', (event)=>{
                     console.log("restart closed", "starting...");
                     this.start(()=>{
-                        this.event.emit('restarted');
+                        this.#event.emit('restarted');
                     });
                 });
             })
@@ -219,6 +226,10 @@ class Server {
         this.restart_cron.start();
     }
 
+    /**
+     * Starts the server
+     * @returns {void}
+     */
     start(){
         const spawn_options = {
             slient: true,
@@ -231,7 +242,7 @@ class Server {
             const mc_server_spawn = spawn('sh', [`${process.env.ROOT}/bin/start.sh`, `-p ${this.path}`], spawn_options);
             mc_server_spawn.unref();
             this.discord.send(`The Minecraft server thats linked to this channel has started. You might be able to join the server in a minute.`);
-            setTimeout(()=> this.init(), 5000);
+            setTimeout(()=> this.init(), 5000); // AFTER 5 SECONDS START WATCH SERVER FILES
         }catch(error){
             console.error(error.toString());
         }
@@ -244,15 +255,17 @@ class Server {
     */
 
     /**
-     * Starts the server
+     * Stops the server
      * @param {errorHandling} callback
      */
     stop(callback){
         this.handler.say("Server will stop");
-        this.handler.stop(0, false, false, false).then(()=>{
-            this.discord.send(`The Minecraft server thats linked to this channel will be stopped`);
-            this.die();
+        this.handler.stop(0, false, false, false).then(async ()=>{
+            if(this.discord){
+                await this.discord.send(`The Minecraft server thats linked to this channel will be stopped`);
+            }
             callback(null);
+            this.die();
         }, (error)=>{
             callback(error);
         });
@@ -363,35 +376,6 @@ class Server {
         };
         this.discord.obeyCommand('banlist', getBanlist);
     }
-    
-    discordUpdatePresence(){
-        const status = {
-            'name': ``,
-            'type': ``
-        }
-        this.discord.updatePresence();
-    }
-
-    restartDiscordService(){
-        if(this.discord){
-            this.discord.logout();
-            this.discord = new Discord(this.server_id);
-            let command_init = {
-                'temp': this.discordObeyCommandTemp,
-                'list': this.discordObeyCommandList,
-                'version': this.discordObeyCommandVersion,
-                'banlist': this.discordObeyCommandBanlist,
-            };
-            this.discord.commands_obeyed.forEach(command_name => {
-                if(command_init.hasOwnProperty(command_name)){
-                    command_init[command_name].bind(this)();
-                }
-            })
-        }
-        else{
-            console.error("Discord server is not running");
-        }
-    }
 
     async update(){
         if(this.status != "running")
@@ -415,7 +399,7 @@ class Server {
                     return;
                 if(line.message == 'Yes'){
                     this.status = "updating";
-                    this.event.removeListener('newLogLine', confirm_update);
+                    this.#event.removeListener('newLogLine', confirm_update);
                     this.handler.tellraw(line.initiator, "Downloading new update...", "green");
                     this.handler.tellraw("@a", "Server will be updated. The server will shutdown in 30 seconds and will come back as soon as the update is completed.", "red");
                     this.handler.stop(30000, 5000, false, false).then(()=> {
@@ -516,23 +500,33 @@ class Server {
     }
 
     on(name, callback){ // THIS IS A SHORTCUT FOR ADDING AN EVENT LISTENER
-        this.event.on(name, callback);
+        this.#event.on(name, callback);
     }
     once(name, callback){ // THIS IS A SHORTCUT FOR ADDING AN EVENT LISTENER
-        this.event.once(name, callback);
+        this.#event.once(name, callback);
     }
 
     die(){
-        if(this.discord){
+        this.ac.abort();
+        if(this.discord.connected){
             this.discord.logout();
             this.discord = null;
         }
-        this.ac.abort();
         this.slot.server = null;
         this.slot = null;
+        this.#isLive = false;
     }
 
     // GETTER
+
+    /**
+     * 
+     * @returns {Boolean}
+     */
+    isLive(){
+        return this.#isLive;
+    }
+
     get currentPlayerCount(){
         return this.getPlayerList().length();
     }
@@ -553,6 +547,17 @@ class Server {
     }
     get banned_players_path (){
         return path.join(this.path, banned_players_path);
+    }
+    
+    // SETTER
+    set ServerExecutable(value){
+        this.#ServerExecutable = value;
+    }
+    set ServerExecutable(value){
+        this.#ServerExecutable = value;
+    }
+    set ServerUpdatePath(value){
+        this.#ServerUpdatePath = value;
     }
 }
 

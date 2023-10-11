@@ -47,7 +47,6 @@ module.exports = class{
         this.event = new Event();
         this.commands_obeyed_counter = 0;
         this.guilds = [];
-        this.connected = false;
 
         this.sendQueue = [];
 
@@ -63,6 +62,7 @@ module.exports = class{
                 GatewayIntentBits.MessageContent
             ]
         });
+        console.log(this.config.token);
         const login = await this.client.login(this.config.token).catch(error => {
             console.error(error.toString());
         });
@@ -82,10 +82,9 @@ module.exports = class{
                 }
                 return channel;
             });
-            this.connected = true;
             this.event.emit('ready');
 
-            this.sendQueue.forEach(e => this.send(e.msg, e.index));
+            this.sendQueue.forEach(async e => await this.send(e.msg, e.index)); // FIFO SEND QUEUE
         });
         this.registerIntervalId = setInterval(()=>{
             this.rest.put(
@@ -255,10 +254,10 @@ module.exports = class{
             throw new Error('Obey command not supported');
         }
     }
+
     logout(){
         clearInterval(this.registerIntervalId);
         this.client.destroy();
-        this.connected = false;
     }
     /**
      * 
@@ -285,5 +284,9 @@ module.exports = class{
                 acc.push(curr.name);
             return acc;
         }, []);
+    }
+
+    get connected (){
+        return this.client.isReady();
     }
 };

@@ -55,9 +55,6 @@ class Slot{
             data = await McUtil.status(host, port, {'timeout': 500});
         }
         catch(error){
-            if(this.server){
-                this.server.die();
-            }
             console.log("No server is running currently")
             // console.error(error);
         }
@@ -91,7 +88,7 @@ class Slot{
                 this.event.emit('stopped');
                 break;
         }
-        if(this.server){
+        if(this.server && this.server.isLive()){
             this.server.die();
         }
         this.status = "not running";
@@ -202,7 +199,7 @@ class Slot{
     }
     async report(){
         let server = null;
-        if(this.server){
+        if(this.getLiveServer()){
             server = await this.getServerStatus();
             if(server != null){
                 server.id = this.server.id;
