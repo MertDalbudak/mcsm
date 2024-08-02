@@ -119,7 +119,7 @@ const slot_id = () => new Promise((res, rej) => {
             rej("Input must be numeric");
         }
         else{
-            config.Slot.id = parse(id) || config_default.Slot.id;
+            config.Slot.id = parseInt(id) || config_default.Slot.id;
             res();
         }
     });
