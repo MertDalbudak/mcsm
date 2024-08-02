@@ -10,7 +10,7 @@ echo "
 sleep 5;
 
 MCSM_USER="mcsm";
-SERVICE_FILE=/etc/systemd/system/mcsm.service
+SERVICE_FILE=/etc/init.d/mcsm
 CURR_DIRECTORY="$( cd "$( dirname "$0" )" &> /dev/null && pwd )"
 PARENT_DIRECTORY=$(dirname "$CURR_DIRECTORY")
 
@@ -22,7 +22,7 @@ else
     echo "Java runtime environment not found. Installing...";
     # CHANGE PACKAGE MANAGER FOR YOUR MACHINE
     apk update
-    apk add openjdk17-jre-headless
+    apk add openjdk21-jre-headless
 fi
 
 apk add screen zip
@@ -64,6 +64,31 @@ fi
 chown -R mcsm:mcsm "$PARENT_DIRECTORY"/*
 chmod -R 777 "$PARENT_DIRECTORY"
 chmod +x "$CURR_DIRECTORY"/*
+
+# SETTING UP MCSM SERVICE
+
+if [ ! -f "$SERVICE_FILE" ]; then
+    echo "#!/sbin/openrc-run
+
+name=\$RC_SVCNAME
+command=\"node /var/server/mcsm/main.js\"
+command_user=\"mcsm:mcsm\"
+pidfile=\"/run/\$RC_SVCNAME/\$RC_SVCNAME.pid\"
+command_background=\"yes\"
+
+depend() {
+    need net
+}
+
+start_pre() {
+        checkpath --directory --owner \$command_user --mode 0775 \\
+                /run/\$RC_SVCNAME /var/log/\$RC_SVCNAME
+}
+" >> $SERVICE_FILE;
+fi
+
+chmod +x $SERVICE_FILE
+rc-update add mcsm
 
 ## config.js
 /usr/bin/node "$CURR_DIRECTORY/setup_config.js" 2>&1;
