@@ -22,7 +22,7 @@ else
     echo "Java runtime environment not found. Installing...";
     # CHANGE PACKAGE MANAGER FOR YOUR MACHINE
     apt update
-    apt install openjdk-19-jre-headless -y
+    apt install openjdk-21-jre -y
 fi
 
 apt install screen zip -y
