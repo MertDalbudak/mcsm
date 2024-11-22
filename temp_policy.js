@@ -35,11 +35,11 @@ const temperature_levels = [
 		"action": (...args) => ({
 			'log': [
 				"Server is running hot on: " + args[0] + " °C", 
-				"If the CPU temperature is not below 70 °C Server will shutdown shortly"
+				"If the CPU temperature is not below 80 °C Server will shutdown shortly"
 			],
 			'saySync': [
 				"Running on hot temperature of " + args[0] + " °C",
-				"If the CPU temperature is not below 70 °C Server will shutdown shortly"
+				"If the CPU temperature is not below 80 °C Server will shutdown shortly"
 			],
 			'stop': [60000, 10000]
 		})
