@@ -24,14 +24,14 @@ const temperature_levels = [
 		})
 	},
 	{
-		"max_temp": 70,
+		"max_temp": 80,
 		"action": (...args) => ({
 			'log': "Server is running on warm temperature: " + args[0] + " °C",
 			'say': "Running on warm temperature of " + args[0] + " °C"
 		})
 	},
 	{
-		"max_temp": 75,
+		"max_temp": 85,
 		"action": (...args) => ({
 			'log': [
 				"Server is running hot on: " + args[0] + " °C", 
