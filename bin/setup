@@ -25,7 +25,7 @@ else
     apt install openjdk-21-jre -y
 fi
 
-apt install screen zip -y
+apt install screen zip lsof -y
 
 ## CHECK IF NODE.JS IS INSTALLED
 
@@ -61,7 +61,7 @@ else
     echo "User exists"
 fi
 
-chown -R mcsm:mcsm .$PARENT_DIRECTORY/*
+chown -R mcsm:mcsm $PARENT_DIRECTORY/*
 chmod -R 777 $PARENT_DIRECTORY
 chmod +x $CURR_DIRECTORY/*
 

@@ -4,6 +4,7 @@ const Event = require('events');
 const net = require('net');
 const Slot = require('./Slot');
 const WebService = require('./WebService');
+const TempPolicy = require('./temp_policy.js');
 
 
 const config = require('./config.json');
@@ -15,7 +16,7 @@ const DIR_NAME = __dirname;
 module.exports = class {
     constructor(server_id){
         this.monitor = {};
-        this.temp_policy = require('./temp_policy.js');
+        this.temp_policy = TempPolicy;
         this.shutdown_temp_threshold = null;
         this.recent_system_temp = 0.00;
         this.recent_system_freq = 0;

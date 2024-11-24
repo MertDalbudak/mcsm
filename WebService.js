@@ -1,5 +1,6 @@
 const net = require('net');
 const Event = require('events');
+const { stat } = require('fs');
 
 class WebService {
     constructor(manager, port, authentication){
@@ -56,7 +57,7 @@ class WebService {
                 }
                 else{
                     if(data.command.args.id)
-                        socket.write(WebService.error_response(error, data.message));
+                        socket.write(WebService.error_response(error));
                 }
                 WebService.send(socket);
             });
@@ -70,21 +71,21 @@ class WebService {
         const slot = this.manager.slot;
         if(slot){
             if(slot.suspend_mc_start){
-                socket.write(WebService.error_response("Starting and restarting are temporarily suspended", false));
+                socket.write(WebService.error_response("Starting and restarting are temporarily suspended"));
                 WebService.send(socket);
                 return;
             }
             socket.write(WebService.msg_response("Server start has been initialized", true));
             WebService.send(socket, {'end': false});
-            slot.startServer(data.server_id, (error, data) => {
-                if(error == null){
-                    socket.write(WebService.msg_response(data.message));
-                }
-                else{
-                    socket.write(WebService.error_response(error, data.message));
-                }
-                WebService.send(socket);
-            });
+            try {
+                const status = await slot.startServer(data.server_id);
+                
+                socket.write(WebService.msg_response(status.message));
+            }
+            catch(error){
+                socket.write(WebService.error_response(error));
+            }
+            WebService.send(socket);
         }
         else{
             socket.write(WebService.error_response("No matching slot found"));
@@ -105,8 +106,8 @@ WebService.data_response = (data, message = "", keep_alive = false) => {
     return JSON.stringify({'error': null, 'data': data, 'message': message, 'keep_alive': keep_alive});
 }
 
-WebService.error_response = (error, message = "", keep_alive = false) => {
-    return JSON.stringify({'error': error, 'data': null, 'message': message, 'keep_alive': keep_alive});
+WebService.error_response = (error, keep_alive = false) => {
+    return JSON.stringify({'error': error, 'data': null, 'message': null, 'keep_alive': keep_alive});
 }
 
 WebService.msg_response = (message, keep_alive = false) => {

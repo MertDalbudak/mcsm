@@ -219,7 +219,7 @@ class Server {
         this.restart_cron.start();
     }
 
-    start(){
+    async start(){
         const spawn_options = {
             slient: true,
             detached: true,
@@ -230,8 +230,19 @@ class Server {
         try{
             const mc_server_spawn = spawn('sh', [`${process.env.ROOT}/bin/start.sh`, `-p ${this.path}`], spawn_options);
             mc_server_spawn.unref();
-            this.discord.send(`The Minecraft server thats linked to this channel has started. You might be able to join the server in a minute.`);
-            setTimeout(()=> this.init(), 5000);
+            try {
+                this.discord.send(`The Minecraft server thats linked to this channel has started. You might be able to join the server in a minute.`);
+            }
+            catch(error){
+                console.error(error);
+            }
+            console.log("STARTED");
+            
+            setTimeout(()=> {
+                console.log("init");
+                
+                this.init();
+            }, 5000);
         }catch(error){
             console.error(error.toString());
         }
@@ -250,7 +261,12 @@ class Server {
     stop(callback){
         this.handler.say("Server will stop");
         this.handler.stop(0, false, false, false).then(()=>{
-            this.discord.send(`The Minecraft server thats linked to this channel will be stopped`);
+            try{
+                this.discord.send(`The Minecraft server thats linked to this channel will be stopped`);
+            }
+            catch(error){
+                console.error(error);
+            }
             this.die();
             callback(null);
         }, (error)=>{

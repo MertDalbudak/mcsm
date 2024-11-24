@@ -105,6 +105,8 @@ class Slot{
         }
         const _Server = require(`./Server/${server_data.type}`);
         this.server = new _Server(server_id);
+        console.log(this.server);
+        
         this.server.slot = this;
         await (new Promise((res) => {
             this.server.on('ready', async ()=>{
@@ -116,10 +118,9 @@ class Slot{
         }));
     }
 
-    async startServer(id, callback){
+    async startServer(id){
         if(this.status == "restart" || this.status == "restarting" || this.status == "starting"){
-            callback("An start up or restart is already in process.", {})
-            return;
+            return "An start up or restart is already in process.";
         }
         
         if(this.server != null){
@@ -144,6 +145,13 @@ class Slot{
             this.server = null;
         }
         try{
+            this.suspendServerStart();  // SUSPEND SLOT SERVER START
+            
+            await this.assignServer(id);    // ASSIGN SERVER TO THIS SLOT
+            // TRY STARTING THE SERVER
+            
+            this.server.start();
+
             // SET NEW STATUS
             switch(this.status){
                 case "restarting":
@@ -154,11 +162,6 @@ class Slot{
                     this.event.emit("started");
                     break;
             }
-            this.suspendServerStart();  // SUSPEND SLOT SERVER START
-            await this.assignServer(id);    // ASSIGN SERVER TO THIS SLOT
-            // TRY STARTING THE SERVER
-            this.server.start(); 
-            
             callback(null, {'message': "Server has been started."});
         }
         catch(error){
