@@ -36,7 +36,7 @@ class Slot{
             this.getLiveServer().then(async (data) => {
                 if(data != null){
                     await this.assignServer(data.id);
-                    this.server.init();
+                    await this.server.init();
                 }
                 this.event.emit('ready');
             });
@@ -55,7 +55,7 @@ class Slot{
             data = await McUtil.status(host, port, {'timeout': 500});
         }
         catch(error){
-            if(this.server){
+            if(this.server && this.status == "running"){
                 this.server.die();
             }
             console.log("No server is running currently")
@@ -108,14 +108,23 @@ class Slot{
         console.log(this.server);
         
         this.server.slot = this;
-        await (new Promise((res) => {
-            this.server.on('ready', async ()=>{
-                await this.server.setPort(this.config.localPort);
-                this.event.emit('serverAssigned');
-                this.getServerStatus();
-                res();
-            });
-        }));
+
+        const port_assign = async ()=>{
+            await this.server.setPort(this.config.localPort);
+            this.event.emit('serverAssigned');
+            this.getServerStatus();
+        };
+        if(this.server.status == 'init'){
+            await new Promise((res)=>{
+                this.server.on('ready', async ()=> {
+                    await port_assign();
+                    res();
+                });
+            })
+        }
+        else{
+            await port_assign();
+        }
     }
 
     async startServer(id){
@@ -149,6 +158,9 @@ class Slot{
             
             await this.assignServer(id);    // ASSIGN SERVER TO THIS SLOT
             // TRY STARTING THE SERVER
+
+            console.log('starting');
+            
             
             this.server.start();
 

@@ -35,6 +35,20 @@ class Server {
         this.ServerUpdatePath;
 
         this.update_permission_requested = false;
+        
+        this.status = "init";
+
+        this.on('ready', ()=>{
+            this.status = 'ready';
+        });
+
+        this.on('starting', ()=>{
+            this.status = 'starting';
+        })
+
+        this.on('started', ()=>{
+            this.status = 'running';
+        })
 
         Server.getAvailableServers().then(conf => {
             this.config = conf.find(e => e.id == this.id);
@@ -230,19 +244,18 @@ class Server {
         try{
             const mc_server_spawn = spawn('sh', [`${process.env.ROOT}/bin/start.sh`, `-p ${this.path}`], spawn_options);
             mc_server_spawn.unref();
+            this.event.emit('starting');
             try {
                 this.discord.send(`The Minecraft server thats linked to this channel has started. You might be able to join the server in a minute.`);
             }
             catch(error){
                 console.error(error);
             }
-            console.log("STARTED");
             
-            setTimeout(()=> {
-                console.log("init");
-                
-                this.init();
-            }, 5000);
+            setTimeout(async ()=> {
+                await this.init();
+                this.event.emit('started');
+            }, 1000);
         }catch(error){
             console.error(error.toString());
         }
