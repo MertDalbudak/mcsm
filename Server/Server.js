@@ -336,7 +336,7 @@ class Server {
             // CHECK IF SOMEONE IS DEAD
             let check = null;
             let killed_by = null;
-            const check_entity_death = new RegExp(`^(?!.*[<>]).*Named entity .+\[.+\] died: `);
+            const check_entity_death = new RegExp(`^(?!.*[<>]).*Named entity .+\\[.+\\] died: `);
             if(line.content.match(check_entity_death)){
                 line.content = line.content.replace(check_entity_death, '');
             }
@@ -352,9 +352,6 @@ class Server {
             }
             if(check != null){
                 let dying_player = check[0].split(" ")[0];
-                if(check[0].match(/Named entity (.)+\['(.)+'/)){
-                    console.log(check[0].match(/Named entity (.)+\['(.)+'/));
-                }
                 let death_message = "";
                 if(killed_by != null){
                     death_message = this.config.discord.killMessage.replace('{{killed_by}}', killed_by).replace('{{dying_player}}', dying_player);
