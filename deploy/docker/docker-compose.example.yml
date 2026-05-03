@@ -1,0 +1,28 @@
+# Example: one MCSM instance with two slots, sharing a server pool from
+# the host. Copy to docker-compose.yml and edit before using.
+
+services:
+  mcsm:
+    image: mcsm:latest
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      args:
+        VERSION: "2.0.0-dev"
+    container_name: mcsm-node-a
+    restart: unless-stopped
+    ports:
+      - "8124:8124"     # API
+      - "25565:25565"   # slot "creative"
+      - "25566:25566"   # slot "survival"
+    volumes:
+      - ./config:/etc/mcsm:ro
+      - ./data:/var/lib/mcsm
+      - /mnt/servers:/mnt/servers           # shared server pool
+    environment:
+      TZ: "Europe/Berlin"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8124/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

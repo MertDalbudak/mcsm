@@ -1,0 +1,37 @@
+[Unit]
+Description=Minecraft Server Monitor (mcsm)
+Documentation=https://github.com/MertDalbudak/mcsm
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mcsm
+Group=mcsm
+ExecStart=/usr/local/bin/mcsm --config /etc/mcsm/config.yaml
+Restart=on-failure
+RestartSec=5s
+
+# Stop policy: send SIGTERM, give 60s for graceful shutdown of any
+# child Minecraft processes that mcsm is still draining.
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+# Hardening — relaxed enough to spawn java + read /sys/class/thermal.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/mcsm /var/log/mcsm
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+LockPersonality=true
+
+# File descriptors for many concurrent log tails / RCON conns / WS clients.
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

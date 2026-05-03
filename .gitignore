@@ -1,7 +1,36 @@
+# Build output
+/bin/
+/dist/
+/mcsm
+/mcsm.exe
+
+# Local config — never commit
+/config.yaml
+/config.local.yaml
+/configs/config.yaml
+/configs/config.local.yaml
+/.env
+/.env.*
+!/.env.example
+
+# TLS material
+/deploy/docker/tls/
+*.pem
+*.key
+*.crt
+!*.example.pem
+
+# Runtime data dir
+/var/
+/data/
+
+# Editor / OS
 .DS_Store
-._*
-.cache
-.config
-.npm
-/node_modules
-config.json
+.idea/
+.vscode/
+*.swp
+*~
+
+# Test artifacts
+/coverage.out
+/coverage.html
