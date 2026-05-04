@@ -16,6 +16,7 @@ import (
 
 	"github.com/MertDalbudak/mcsm/internal/api"
 	"github.com/MertDalbudak/mcsm/internal/audit"
+	"github.com/MertDalbudak/mcsm/internal/backup"
 	"github.com/MertDalbudak/mcsm/internal/buildinfo"
 	"github.com/MertDalbudak/mcsm/internal/config"
 	"github.com/MertDalbudak/mcsm/internal/discovery"
@@ -25,6 +26,19 @@ import (
 	"github.com/MertDalbudak/mcsm/internal/slot"
 	"github.com/MertDalbudak/mcsm/internal/system"
 )
+
+// tempAdapter satisfies slot.DiscordTempProvider on top of the
+// system.Temperature sampler. Lives in main so the slot package
+// doesn't need to import internal/system.
+type tempAdapter struct{ t *system.Temperature }
+
+func (a tempAdapter) Snapshot() (float64, bool) {
+	last, _ := a.t.Snapshot()
+	if last == nil {
+		return 0, false
+	}
+	return last.Celsius, true
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -72,6 +86,9 @@ func run() error {
 	host, _ := os.Hostname()
 	slotMgr := slot.NewManager(cfg, host, disco)
 
+	// Wire each slot's Discord /temp command to the temperature sampler
+	// once it's constructed below.
+
 	var temp *system.Temperature
 	if cfg.System.Temperature != nil && cfg.System.Temperature.Sensor != "" {
 		t, err := system.NewTemperature(cfg.System.Temperature.Sensor, 30*time.Second, 60)
@@ -81,6 +98,12 @@ func run() error {
 		} else {
 			temp = t
 			go temp.Run(ctx)
+			// Make CPU temperature available to every slot's Discord
+			// /temp command. Adapter satisfies slot.DiscordTempProvider.
+			adapter := tempAdapter{t: temp}
+			for _, sl := range slotMgr.List() {
+				sl.SetTempProvider(adapter)
+			}
 		}
 	}
 
@@ -117,6 +140,11 @@ func run() error {
 		go peerPool.Run(ctx)
 	}
 
+	backupStore, err := backup.New(filepath.Join(cfg.Instance.DataDir, "backups"))
+	if err != nil {
+		slog.Warn("backups: disabled", "err", err)
+	}
+
 	srv, err := api.New(api.Deps{
 		Config:      cfg,
 		Discovery:   disco,
@@ -125,6 +153,7 @@ func run() error {
 		Audit:       auditLog,
 		Metrics:     metricsCol,
 		Peers:       peerPool,
+		Backups:     backupStore,
 	})
 	if err != nil {
 		return fmt.Errorf("api: %w", err)

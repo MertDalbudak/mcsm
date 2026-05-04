@@ -461,6 +461,10 @@ Subscribe to slot state transitions and lifecycle events.
 { "type": "state", "from": "starting", "to": "running", "at": "..." }
 { "type": "player_join", "player": "Steve", "at": "..." }
 { "type": "player_leave", "player": "Steve", "at": "..." }
+{ "type": "player_death", "player": "Steve", "killer": "Zombie", "cause": "mob",
+  "message": "Steve was slain by Zombie", "at": "..." }
+{ "type": "player_kick", "player": "Steve", "reason": "flying", "at": "..." }
+{ "type": "chat", "player": "Steve", "message": "hello world", "at": "..." }
 { "type": "tps_sample", "tps_1m": 19.4, "tps_5m": 19.7, "at": "..." }
 { "type": "error", "code": "rcon_disconnected", "message": "...", "at": "..." }
 ```
@@ -764,6 +768,40 @@ DELETE /api/v1/slots/{name}/server/backups/{id}
 If `stop_server: true`, slot transitions `running → stopping → idle → mounting → starting → running` around the snapshot. Otherwise an online snapshot is taken (RCON `save-off` + flush + copy + `save-on`).
 
 **Scope:** `server:admin`
+
+---
+
+### Updates
+
+```
+GET  /api/v1/slots/{name}/server/update?mc_version=1.21.4
+POST /api/v1/slots/{name}/server/update
+```
+
+`GET` returns the latest available release for the server's flavor:
+
+```json
+{
+  "flavor": "paper", "mc_version": "1.21.4", "build": 50,
+  "download_url": "https://api.papermc.io/.../paper-1.21.4-50.jar",
+  "sha256": "0123abcd...", "jar_name": "paper-1.21.4-50.jar",
+  "published_at": "2026-04-30T..."
+}
+```
+
+`POST` (slot must be **stopped first**):
+
+```json
+{ "mc_version": "1.21.4", "backup": true }
+```
+
+When `backup: true`, an offline backup with label `pre-update` is taken before the swap. The previous jar is preserved as `paper.jar.previous` next to the new one.
+
+**Scope:** `server:admin`
+
+**Errors:** `409 slot_busy` if the slot isn't terminal; `502` for upstream PaperMC failures or sha256 mismatches.
+
+> Currently supports `flavor=paper` only. Vanilla / Fabric / Forge return `400 validation_failed`.
 
 ---
 

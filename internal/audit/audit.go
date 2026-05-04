@@ -142,11 +142,14 @@ func (l *Logger) List(q Query) (entries []Entry, nextCursor string) {
 	l.mu.RUnlock()
 
 	out := make([]Entry, 0, q.Limit)
-	// Walk newest → oldest (UI typically wants newest first).
+	// Walk newest → oldest. Pagination semantics: the cursor is the
+	// oldest ID returned by the previous page; this call returns
+	// entries strictly older than cursor (i.e. ID < cursor). When
+	// cursor is 0 (first page), no skip applies.
 	for i := len(ring) - 1; i >= 0; i-- {
 		e := ring[i]
-		if e.ID <= cursor {
-			break
+		if cursor > 0 && e.ID >= cursor {
+			continue
 		}
 		if !matches(e, q) {
 			continue

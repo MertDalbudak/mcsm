@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/MertDalbudak/mcsm/internal/buildinfo"
+	"github.com/MertDalbudak/mcsm/internal/openapi"
 )
 
 type versionResponse struct {
@@ -79,15 +80,7 @@ func (s *Server) handleInstance(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleOpenAPI is a placeholder until the spec generator lands. Returning
-// a stub keeps the route declared so clients don't get 404 surprises.
+// handleOpenAPI returns the generated OpenAPI 3.1 document for v1.
 func (s *Server) handleOpenAPI(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, r, http.StatusOK, map[string]any{
-		"openapi": "3.1.0",
-		"info": map[string]any{
-			"title":   "MCSM API",
-			"version": "1.0.0",
-		},
-		"x-mcsm-status": "spec generation not yet implemented",
-	})
+	WriteJSON(w, r, http.StatusOK, openapi.Build(buildinfo.Version))
 }

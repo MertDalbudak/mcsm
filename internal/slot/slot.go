@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"github.com/MertDalbudak/mcsm/internal/config"
+	"github.com/MertDalbudak/mcsm/internal/discord"
 	"github.com/MertDalbudak/mcsm/internal/discovery"
 	"github.com/MertDalbudak/mcsm/internal/events"
+	"github.com/MertDalbudak/mcsm/internal/gameplay"
 	"github.com/MertDalbudak/mcsm/internal/lock"
 	"github.com/MertDalbudak/mcsm/internal/logtail"
 	"github.com/MertDalbudak/mcsm/internal/process"
@@ -73,6 +75,8 @@ type Slot struct {
 	slp         *SLPInfo
 	tailer      *logtail.Tailer
 	bus         *events.Bus // always non-nil, even when idle (created in New)
+	bot         *discord.Bot
+	tempProvider DiscordTempProvider // optional; injected via SetTempProvider
 
 	// Stop coordination:
 	stopOnce sync.Once
@@ -294,7 +298,11 @@ func (s *Slot) Start(ctx context.Context, opts StartOptions) (Snapshot, error) {
 	go s.healthLoop(bgCtx)
 	go s.rconConnectLoop(bgCtx, rconPort, pass)
 	go tailer.Run(bgCtx)
-	go s.detectGameplayEvents(bgCtx, tailer)
+	go s.detectGameplayEvents(bgCtx, tailer, cfg)
+
+	if cfg.Discord.Token != "" && len(cfg.Discord.Channels) > 0 {
+		go s.startDiscordBot(bgCtx, cfg)
+	}
 
 	slog.Info("slot: mounted",
 		"slot", s.cfg.Name,
@@ -464,6 +472,39 @@ func (s *Slot) Restart(ctx context.Context, opts StopOptions) (Snapshot, error) 
 	return s.Snapshot(), nil
 }
 
+// SaveControlForBackup returns a backup.SaveController that flushes the
+// world via RCON. Only works while the slot is running and RCON is
+// connected; returns nil otherwise (the backup package treats nil as
+// "skip pause/resume", which is correct for offline backups).
+func (s *Slot) SaveControlForBackup() *RconSaveControl {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.state != StateRunning || s.rconClient == nil {
+		return nil
+	}
+	return &RconSaveControl{rc: s.rconClient}
+}
+
+// RconSaveControl implements backup.SaveController on top of RCON.
+type RconSaveControl struct {
+	rc *rcon.Client
+}
+
+// Pause: save-off then save-all flush.
+func (c *RconSaveControl) Pause(ctx context.Context) error {
+	if _, err := c.rc.Cmd(ctx, "save-off"); err != nil {
+		return err
+	}
+	_, err := c.rc.Cmd(ctx, "save-all flush")
+	return err
+}
+
+// Resume: save-on so autosaves continue.
+func (c *RconSaveControl) Resume(ctx context.Context) error {
+	_, err := c.rc.Cmd(ctx, "save-on")
+	return err
+}
+
 // Logs returns up to n most recent captured log lines (oldest first).
 // Empty when nothing is mounted.
 func (s *Slot) Logs(n int) []process.LogLine {
@@ -504,18 +545,22 @@ func (s *Slot) Command(ctx context.Context, cmd string) (string, error) {
 	return rc.Cmd(ctx, cmd)
 }
 
-// detectGameplayEvents subscribes to the tailer and emits player_join /
-// player_leave events on the slot bus. The Vanilla / Paper log format
-// for these is well-known:
-//
-//	[12:00:01] [Server thread/INFO]: Steve joined the game
-//	[12:00:01] [Server thread/INFO]: Steve left the game
+// detectGameplayEvents subscribes to the tailer and emits typed events
+// on the slot bus: joins, leaves, deaths, chat, kicks. Optional
+// behaviours (anti-toxicity, ban-flying) are driven by feature flags
+// loaded from the per-server .mcsm/config.yaml.
 //
 // We only look at INFO entries from "Server thread" to avoid being
 // fooled by player chat that happens to contain "joined the game".
-func (s *Slot) detectGameplayEvents(ctx context.Context, t *logtail.Tailer) {
+func (s *Slot) detectGameplayEvents(ctx context.Context, t *logtail.Tailer, cfg *serverid.Config) {
 	sub := t.Subscribe(64)
 	defer t.Unsubscribe(sub)
+
+	tox := buildToxicityChecker(cfg)
+	banFlying := featureBool(cfg.Features, "ban_flying", false)
+	emitDeath := featureBool(cfg.Features, "death_messages", true)
+	emitChat := !tox.Empty() // we only emit chat events when there's a consumer
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -528,22 +573,138 @@ func (s *Slot) detectGameplayEvents(ctx context.Context, t *logtail.Tailer) {
 				continue
 			}
 			msg := e.Message
+
+			// joins / leaves
 			switch {
 			case len(msg) > 17 && hasSuffix(msg, " joined the game"):
 				s.bus.Publish(events.Event{
-					Type:   events.TypePlayerJoin,
+					Type: events.TypePlayerJoin, At: e.TS,
 					Player: msg[:len(msg)-len(" joined the game")],
-					At:     e.TS,
 				})
+				continue
 			case len(msg) > 15 && hasSuffix(msg, " left the game"):
 				s.bus.Publish(events.Event{
-					Type:   events.TypePlayerLeave,
+					Type: events.TypePlayerLeave, At: e.TS,
 					Player: msg[:len(msg)-len(" left the game")],
-					At:     e.TS,
 				})
+				continue
+			}
+
+			// chat → optional toxicity action
+			if player, text, ok := gameplay.ChatMessage(msg); ok {
+				if emitChat {
+					s.bus.Publish(events.Event{
+						Type: events.TypeChat, At: e.TS,
+						Player: player, Message: text,
+					})
+				}
+				if !tox.Empty() && tox.Match(text) {
+					s.runToxicityAction(player)
+				}
+				continue
+			}
+
+			// flying-kick → optional auto-ban
+			if banFlying {
+				if player, ok := gameplay.FlyingKick(msg); ok {
+					s.bus.Publish(events.Event{
+						Type: events.TypePlayerKick, At: e.TS,
+						Player: player, Reason: "flying",
+					})
+					s.runFlyingBan(player)
+					continue
+				}
+			}
+
+			// deaths
+			if emitDeath {
+				if d, ok := gameplay.ParseDeath(msg); ok {
+					s.bus.Publish(events.Event{
+						Type:    events.TypePlayerDeath, At: e.TS,
+						Player:  d.Player,
+						Killer:  d.Killer,
+						Cause:   string(d.Cause),
+						Message: msg,
+					})
+					s.notifyDiscord("💀 " + msg)
+					continue
+				}
 			}
 		}
 	}
+}
+
+// runToxicityAction issues an in-game warning. Future versions may
+// kick/mute/escalate; for now we just say-warn the offender.
+func (s *Slot) runToxicityAction(player string) {
+	rc := s.currentRcon()
+	if rc == nil {
+		return
+	}
+	rctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, _ = rc.Cmd(rctx, fmt.Sprintf("tellraw %s {\"text\":\"[mcsm] Watch your language.\",\"color\":\"red\"}", player))
+}
+
+// runFlyingBan issues a 24-hour ban via RCON.
+func (s *Slot) runFlyingBan(player string) {
+	rc := s.currentRcon()
+	if rc == nil {
+		return
+	}
+	rctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, _ = rc.Cmd(rctx, fmt.Sprintf("ban %s Flying not allowed", player))
+}
+
+func (s *Slot) currentRcon() *rcon.Client {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.rconClient
+}
+
+// buildToxicityChecker converts the per-server features map into a
+// concrete checker. Words live under features.anti_toxicity_words.
+func buildToxicityChecker(cfg *serverid.Config) *gameplay.ToxicityChecker {
+	if cfg == nil || cfg.Features == nil {
+		return gameplay.NewToxicityChecker(nil)
+	}
+	raw, ok := cfg.Features["anti_toxicity_words"]
+	if !ok {
+		return gameplay.NewToxicityChecker(nil)
+	}
+	switch v := raw.(type) {
+	case []string:
+		return gameplay.NewToxicityChecker(v)
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, w := range v {
+			if s, ok := w.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return gameplay.NewToxicityChecker(out)
+	}
+	return gameplay.NewToxicityChecker(nil)
+}
+
+// featureBool reads a boolean feature flag with a default. Accepts
+// raw bool, "true"/"false" strings.
+func featureBool(features map[string]any, key string, def bool) bool {
+	if features == nil {
+		return def
+	}
+	raw, ok := features[key]
+	if !ok {
+		return def
+	}
+	switch v := raw.(type) {
+	case bool:
+		return v
+	case string:
+		return v == "true"
+	}
+	return def
 }
 
 func hasSuffix(s, suffix string) bool {
@@ -579,6 +740,10 @@ func (s *Slot) watchExit() {
 	s.mountedID = ""
 	s.slp = nil
 	s.mu.Unlock()
+
+	// Tear down the Discord session — outside the slot lock so the
+	// gateway close doesn't block other operations.
+	s.closeDiscordBot()
 
 	switch {
 	case stopping && info.Reason == "normal":

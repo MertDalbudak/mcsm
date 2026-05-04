@@ -162,7 +162,20 @@ func eventToFrame(e events.Event) map[string]any {
 		out["tps_5m"] = e.TPS5m
 	case events.TypeError:
 		out["code"] = e.Code
-		out["message"] = e.Error
+		out["message"] = e.Message
+	case events.TypePlayerDeath:
+		out["player"] = e.Player
+		if e.Killer != "" {
+			out["killer"] = e.Killer
+		}
+		out["cause"] = e.Cause
+		out["message"] = e.Message
+	case events.TypePlayerKick:
+		out["player"] = e.Player
+		out["reason"] = e.Reason
+	case events.TypeChat:
+		out["player"] = e.Player
+		out["message"] = e.Message
 	}
 	return out
 }

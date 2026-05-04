@@ -13,27 +13,33 @@ import (
 type Type string
 
 const (
-	TypeState       Type = "state"
-	TypePlayerJoin  Type = "player_join"
-	TypePlayerLeave Type = "player_leave"
-	TypeTPSSample   Type = "tps_sample"
-	TypeError       Type = "error"
+	TypeState        Type = "state"
+	TypePlayerJoin   Type = "player_join"
+	TypePlayerLeave  Type = "player_leave"
+	TypePlayerDeath  Type = "player_death"
+	TypePlayerKick   Type = "player_kick"
+	TypeChat         Type = "chat"
+	TypeTPSSample    Type = "tps_sample"
+	TypeError        Type = "error"
 )
 
 // Event is a slot-scoped event delivered to subscribers. Fields are
 // loose to keep the bus simple; the WS handler renders the documented
 // frame shape per type.
 type Event struct {
-	Type   Type           `json:"type"`
-	At     time.Time      `json:"at"`
-	From   string         `json:"from,omitempty"`
-	To     string         `json:"to,omitempty"`
-	Player string         `json:"player,omitempty"`
-	TPS1m  float64        `json:"tps_1m,omitempty"`
-	TPS5m  float64        `json:"tps_5m,omitempty"`
-	Code   string         `json:"code,omitempty"`
-	Error  string         `json:"message,omitempty"`
-	Extra  map[string]any `json:"extra,omitempty"`
+	Type    Type           `json:"type"`
+	At      time.Time      `json:"at"`
+	From    string         `json:"from,omitempty"`
+	To      string         `json:"to,omitempty"`
+	Player  string         `json:"player,omitempty"`
+	Killer  string         `json:"killer,omitempty"`  // for player_death
+	Cause   string         `json:"cause,omitempty"`   // for player_death
+	Reason  string         `json:"reason,omitempty"`  // for player_kick
+	Message string         `json:"message,omitempty"` // for chat / error
+	TPS1m   float64        `json:"tps_1m,omitempty"`
+	TPS5m   float64        `json:"tps_5m,omitempty"`
+	Code    string         `json:"code,omitempty"`
+	Extra   map[string]any `json:"extra,omitempty"`
 }
 
 // Bus is one slot's event channel. Subscribers register via Subscribe

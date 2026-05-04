@@ -98,17 +98,23 @@ func (s *Server) register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/slots/{name}/events",
 		chain(auth, scope("slot:read"))(http.HandlerFunc(s.handleSlotEventsStream)))
 
-	// --- Backups (Phase 3) ---
+	// --- Update ---
+	mux.Handle("GET /api/v1/slots/{name}/server/update",
+		chain(auth, scope("server:admin"))(http.HandlerFunc(s.handleUpdateCheck)))
+	mux.Handle("POST /api/v1/slots/{name}/server/update",
+		chain(auth, scope("server:admin"))(http.HandlerFunc(s.handleUpdateApply)))
+
+	// --- Backups ---
 	mux.Handle("GET /api/v1/slots/{name}/server/backups",
-		chain(auth, scope("server:admin"))(notImplemented("GET /api/v1/slots/{name}/server/backups")))
+		chain(auth, scope("server:admin"))(http.HandlerFunc(s.handleBackupsList)))
 	mux.Handle("POST /api/v1/slots/{name}/server/backups",
-		chain(auth, scope("server:admin"))(notImplemented("POST /api/v1/slots/{name}/server/backups")))
+		chain(auth, scope("server:admin"))(http.HandlerFunc(s.handleBackupCreate)))
 	mux.Handle("GET /api/v1/slots/{name}/server/backups/{id}",
-		chain(auth, scope("server:admin"))(notImplemented("GET /api/v1/slots/{name}/server/backups/{id}")))
+		chain(auth, scope("server:admin"))(http.HandlerFunc(s.handleBackupGet)))
 	mux.Handle("POST /api/v1/slots/{name}/server/backups/{id}/restore",
-		chain(auth, scope("server:admin"))(notImplemented("POST /api/v1/slots/{name}/server/backups/{id}/restore")))
+		chain(auth, scope("server:admin"))(http.HandlerFunc(s.handleBackupRestore)))
 	mux.Handle("DELETE /api/v1/slots/{name}/server/backups/{id}",
-		chain(auth, scope("server:admin"))(notImplemented("DELETE /api/v1/slots/{name}/server/backups/{id}")))
+		chain(auth, scope("server:admin"))(http.HandlerFunc(s.handleBackupDelete)))
 
 	// --- System ---
 	mux.Handle("GET /api/v1/system/temperature",

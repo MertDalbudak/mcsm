@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/MertDalbudak/mcsm/internal/audit"
+	"github.com/MertDalbudak/mcsm/internal/backup"
 	"github.com/MertDalbudak/mcsm/internal/config"
 	"github.com/MertDalbudak/mcsm/internal/discovery"
 	"github.com/MertDalbudak/mcsm/internal/metrics"
@@ -34,6 +35,7 @@ type Server struct {
 	audit     *audit.Logger       // nil if disabled
 	metrics   *metrics.Collectors // nil if disabled
 	peers     *peers.Pool         // nil if no peers configured
+	backups   *backup.Store       // nil if data_dir unwritable
 	startedAt time.Time
 	ready     atomic.Bool
 
@@ -49,6 +51,7 @@ type Deps struct {
 	Audit       *audit.Logger
 	Metrics     *metrics.Collectors
 	Peers       *peers.Pool
+	Backups     *backup.Store
 }
 
 // New constructs the Server but does not bind a port. Call Run.
@@ -66,6 +69,7 @@ func New(deps Deps) (*Server, error) {
 		audit:     deps.Audit,
 		metrics:   deps.Metrics,
 		peers:     deps.Peers,
+		backups:   deps.Backups,
 		startedAt: time.Now().UTC(),
 	}, nil
 }

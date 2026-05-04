@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -231,21 +232,16 @@ func (t *Tailer) backfill(f *os.File, n int) {
 	// Re-seek to start so the main loop sees the same bytes via reader.
 	_, _ = f.Seek(0, io.SeekStart)
 
-	lines := []string{}
-	last := -1
-	for i := len(body) - 1; i >= 0; i-- {
-		if body[i] == '\n' {
-			if last >= 0 {
-				lines = append([]string{string(body[i+1 : last])}, lines...)
-				if len(lines) >= n {
-					break
-				}
-			}
-			last = i
-		}
+	// Split on newlines; drop trailing empty (from final \n) and bound to N.
+	all := strings.Split(string(body), "\n")
+	if len(all) > 0 && all[len(all)-1] == "" {
+		all = all[:len(all)-1]
+	}
+	if len(all) > n {
+		all = all[len(all)-n:]
 	}
 	now := time.Now()
-	for _, l := range lines {
+	for _, l := range all {
 		if l == "" {
 			continue
 		}
@@ -267,8 +263,11 @@ func (t *Tailer) readUntilEOF(r *bufio.Reader, pos *int64, f *os.File) (int64, e
 	for {
 		line, err := r.ReadString('\n')
 		if line != "" {
-			t.emit(Parse(line[:len(line)-min(1, len(line))]+stripNL(line), time.Now()))
 			*pos += int64(len(line))
+			trimmed := strings.TrimRight(line, "\r\n")
+			if trimmed != "" {
+				t.emit(Parse(trimmed, time.Now()))
+			}
 		}
 		if err == io.EOF {
 			return *pos, nil
@@ -277,19 +276,6 @@ func (t *Tailer) readUntilEOF(r *bufio.Reader, pos *int64, f *os.File) (int64, e
 			return *pos, err
 		}
 	}
-}
-
-func stripNL(s string) string {
-	if len(s) == 0 {
-		return s
-	}
-	if s[len(s)-1] == '\n' {
-		s = s[:len(s)-1]
-	}
-	if len(s) > 0 && s[len(s)-1] == '\r' {
-		s = s[:len(s)-1]
-	}
-	return s
 }
 
 func (t *Tailer) emit(e LogEntry) {
