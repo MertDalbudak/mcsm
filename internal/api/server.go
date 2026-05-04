@@ -16,6 +16,7 @@ import (
 	"github.com/MertDalbudak/mcsm/internal/config"
 	"github.com/MertDalbudak/mcsm/internal/discovery"
 	"github.com/MertDalbudak/mcsm/internal/slot"
+	"github.com/MertDalbudak/mcsm/internal/system"
 )
 
 // Server is the HTTP entrypoint. Sub-systems (discovery store, slot
@@ -26,6 +27,7 @@ type Server struct {
 	auth      *Authenticator
 	disco     *discovery.Store
 	slotMgr   *slot.Manager
+	temp      *system.Temperature // nil if not configured
 	startedAt time.Time
 	ready     atomic.Bool
 
@@ -34,9 +36,10 @@ type Server struct {
 
 // Deps wires the subsystems Server depends on. Constructed in main.go.
 type Deps struct {
-	Config    *config.Config
-	Discovery *discovery.Store
-	Slots     *slot.Manager
+	Config      *config.Config
+	Discovery   *discovery.Store
+	Slots       *slot.Manager
+	Temperature *system.Temperature // optional; nil disables /system/temperature
 }
 
 // New constructs the Server but does not bind a port. Call Run.
@@ -50,6 +53,7 @@ func New(deps Deps) (*Server, error) {
 		auth:      auth,
 		disco:     deps.Discovery,
 		slotMgr:   deps.Slots,
+		temp:      deps.Temperature,
 		startedAt: time.Now().UTC(),
 	}, nil
 }

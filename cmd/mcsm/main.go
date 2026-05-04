@@ -18,6 +18,7 @@ import (
 	"github.com/MertDalbudak/mcsm/internal/discovery"
 	"github.com/MertDalbudak/mcsm/internal/logging"
 	"github.com/MertDalbudak/mcsm/internal/slot"
+	"github.com/MertDalbudak/mcsm/internal/system"
 )
 
 func main() {
@@ -66,10 +67,23 @@ func run() error {
 	host, _ := os.Hostname()
 	slotMgr := slot.NewManager(cfg, host, disco)
 
+	var temp *system.Temperature
+	if cfg.System.Temperature != nil && cfg.System.Temperature.Sensor != "" {
+		t, err := system.NewTemperature(cfg.System.Temperature.Sensor, 30*time.Second, 60)
+		if err != nil {
+			slog.Warn("system: temperature monitoring disabled",
+				"sensor", cfg.System.Temperature.Sensor, "err", err)
+		} else {
+			temp = t
+			go temp.Run(ctx)
+		}
+	}
+
 	srv, err := api.New(api.Deps{
-		Config:    cfg,
-		Discovery: disco,
-		Slots:     slotMgr,
+		Config:      cfg,
+		Discovery:   disco,
+		Slots:       slotMgr,
+		Temperature: temp,
 	})
 	if err != nil {
 		return fmt.Errorf("api: %w", err)

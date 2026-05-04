@@ -72,6 +72,7 @@ type Slot struct {
 	// Stop coordination:
 	stopOnce sync.Once
 	stopping bool
+	stopAbort chan struct{} // closed by AbortStop() to unblock the grace timer
 }
 
 // New constructs an idle Slot bound to the supervising instance.
@@ -345,6 +346,8 @@ func (s *Slot) Stop(ctx context.Context, opts StopOptions) (Snapshot, error) {
 	s.transition(StateStopping, nil)
 	s.mu.Lock()
 	s.stopping = true
+	s.stopAbort = make(chan struct{})
+	abort := s.stopAbort
 	proc := s.process
 	rc := s.rconClient
 	s.mu.Unlock()
@@ -356,8 +359,6 @@ func (s *Slot) Stop(ctx context.Context, opts StopOptions) (Snapshot, error) {
 			_, _ = rc.Cmd(cctx, "stop")
 			cancel()
 		}
-		// Now wait up to GracefulSeconds for natural exit, then SIGTERM,
-		// then KillGrace, then SIGKILL.
 		grace := time.Duration(opts.GracefulSeconds) * time.Second
 		if proc == nil {
 			return
@@ -365,6 +366,19 @@ func (s *Slot) Stop(ctx context.Context, opts StopOptions) (Snapshot, error) {
 		select {
 		case <-proc.ExitChannel():
 			// Clean exit before grace expired.
+		case <-abort:
+			// Operator called AbortStop. Don't escalate; revert to running
+			// (the process is presumed still alive — RCON stop may not
+			// have shut things down on every flavor).
+			slog.Info("slot: stop aborted by operator", "slot", s.cfg.Name)
+			s.mu.Lock()
+			if s.state == StateStopping {
+				s.stopping = false
+				s.stopAbort = nil
+			}
+			s.mu.Unlock()
+			s.transition(StateRunning, nil)
+			return
 		case <-time.After(grace):
 			slog.Warn("slot: graceful timeout, escalating", "slot", s.cfg.Name)
 			tctx, cancel := context.WithTimeout(context.Background(), opts.KillGrace+10*time.Second)
@@ -373,6 +387,24 @@ func (s *Slot) Stop(ctx context.Context, opts StopOptions) (Snapshot, error) {
 		}
 	}()
 	return s.Snapshot(), nil
+}
+
+// AbortStop cancels an in-progress graceful shutdown if the grace timer
+// hasn't fired yet. Returns ErrNotStopping if the slot isn't stopping.
+//
+// Note: if the RCON "stop" command already convinced Minecraft to shut
+// down, the process will exit anyway and the abort is a no-op (the
+// watchExit goroutine wins the race). This call only short-circuits the
+// SIGTERM/SIGKILL escalation that mcsm would otherwise drive.
+func (s *Slot) AbortStop() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state != StateStopping || s.stopAbort == nil {
+		return ErrNotStopping
+	}
+	close(s.stopAbort)
+	s.stopAbort = nil
+	return nil
 }
 
 // Restart is Stop then Start with the same server id once the slot
@@ -402,6 +434,31 @@ func (s *Slot) Restart(ctx context.Context, opts StopOptions) (Snapshot, error) 
 		slog.Error("slot: restart never reached startable state", "slot", s.cfg.Name)
 	}()
 	return s.Snapshot(), nil
+}
+
+// Logs returns up to n most recent captured log lines (oldest first).
+// Empty when nothing is mounted.
+func (s *Slot) Logs(n int) []process.LogLine {
+	s.mu.RLock()
+	p := s.process
+	s.mu.RUnlock()
+	if p == nil {
+		return nil
+	}
+	return p.Logs(n)
+}
+
+// MountedServer returns a snapshot of the discovered.Server currently
+// mounted (nil when idle). Returned value is a copy; safe to read without
+// further locking.
+func (s *Slot) MountedServer() *discovery.Server {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.server == nil {
+		return nil
+	}
+	srv := *s.server
+	return &srv
 }
 
 // Command sends a raw RCON command to the mounted server.

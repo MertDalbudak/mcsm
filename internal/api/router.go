@@ -41,7 +41,7 @@ func (s *Server) register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/slots/{name}",
 		chain(auth, scope("slot:read"))(http.HandlerFunc(s.handleSlotGet)))
 	mux.Handle("GET /api/v1/slots/{name}/compatible-servers",
-		chain(auth, scope("slot:read"))(notImplemented("GET /api/v1/slots/{name}/compatible-servers")))
+		chain(auth, scope("slot:read"))(http.HandlerFunc(s.handleSlotCompatible)))
 	mux.Handle("POST /api/v1/slots/{name}/start",
 		chain(auth, scope("slot:write"))(http.HandlerFunc(s.handleSlotStart)))
 	mux.Handle("POST /api/v1/slots/{name}/stop",
@@ -70,7 +70,7 @@ func (s *Server) register(mux *http.ServeMux) {
 		chain(auth, scope("server:admin"))(http.HandlerFunc(s.handleServerDeop)))
 
 	mux.Handle("GET /api/v1/slots/{name}/server/whitelist",
-		chain(auth, scope("server:read"))(notImplemented("GET /api/v1/slots/{name}/server/whitelist")))
+		chain(auth, scope("server:read"))(http.HandlerFunc(s.handleWhitelistGet)))
 	mux.Handle("PUT /api/v1/slots/{name}/server/whitelist/{player}",
 		chain(auth, scope("server:admin"))(http.HandlerFunc(s.handleWhitelistAdd)))
 	mux.Handle("DELETE /api/v1/slots/{name}/server/whitelist/{player}",
@@ -79,18 +79,18 @@ func (s *Server) register(mux *http.ServeMux) {
 		chain(auth, scope("server:admin"))(http.HandlerFunc(s.handleWhitelistReload)))
 
 	mux.Handle("GET /api/v1/slots/{name}/server/banlist",
-		chain(auth, scope("server:read"))(notImplemented("GET /api/v1/slots/{name}/server/banlist")))
+		chain(auth, scope("server:read"))(http.HandlerFunc(s.handleBanlistGet)))
 	mux.Handle("GET /api/v1/slots/{name}/server/banlist/ips",
-		chain(auth, scope("server:read"))(notImplemented("GET /api/v1/slots/{name}/server/banlist/ips")))
+		chain(auth, scope("server:read"))(http.HandlerFunc(s.handleBanlistIPsGet)))
 
 	mux.Handle("GET /api/v1/slots/{name}/server/properties",
-		chain(auth, scope("server:read"))(notImplemented("GET /api/v1/slots/{name}/server/properties")))
+		chain(auth, scope("server:read"))(http.HandlerFunc(s.handleServerPropertiesGet)))
 	mux.Handle("PATCH /api/v1/slots/{name}/server/properties",
-		chain(auth, scope("server:admin"))(notImplemented("PATCH /api/v1/slots/{name}/server/properties")))
+		chain(auth, scope("server:admin"))(http.HandlerFunc(s.handleServerPropertiesPatch)))
 
-	// --- Logs (Phase 2) ---
+	// --- Logs (live tail via WS still in Phase 2D) ---
 	mux.Handle("GET /api/v1/slots/{name}/server/logs",
-		chain(auth, scope("server:read"))(notImplemented("GET /api/v1/slots/{name}/server/logs")))
+		chain(auth, scope("server:read"))(http.HandlerFunc(s.handleServerLogs)))
 
 	// --- Backups (Phase 3) ---
 	mux.Handle("GET /api/v1/slots/{name}/server/backups",
@@ -104,9 +104,9 @@ func (s *Server) register(mux *http.ServeMux) {
 	mux.Handle("DELETE /api/v1/slots/{name}/server/backups/{id}",
 		chain(auth, scope("server:admin"))(notImplemented("DELETE /api/v1/slots/{name}/server/backups/{id}")))
 
-	// --- System (Phase 2) ---
+	// --- System ---
 	mux.Handle("GET /api/v1/system/temperature",
-		chain(auth, scope("system:read"))(notImplemented("GET /api/v1/system/temperature")))
+		chain(auth, scope("system:read"))(http.HandlerFunc(s.handleSystemTemperature)))
 	mux.Handle("GET /api/v1/system/resources",
 		chain(auth, scope("system:read"))(notImplemented("GET /api/v1/system/resources")))
 

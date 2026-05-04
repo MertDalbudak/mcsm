@@ -90,12 +90,11 @@ func (s *Server) handleSlotAbortStop(w http.ResponseWriter, r *http.Request) {
 			"no slot with that name", map[string]any{"slot": name})
 		return
 	}
-	// Phase 2: abort-stop is best-effort. The grace timer is internal to
-	// Slot.Stop; we don't yet cancel mid-grace. Returning 409 keeps the
-	// API contract honest about the limitation rather than silently lying.
-	WriteError(w, r, http.StatusConflict, CodeNotStopping,
-		"abort-stop not implemented in this build; grace period will run to completion",
-		map[string]any{"slot": sl.Name(), "current_state": sl.State()})
+	if err := sl.AbortStop(); err != nil {
+		mapSlotError(w, r, err, name)
+		return
+	}
+	WriteJSON(w, r, http.StatusOK, sl.Snapshot())
 }
 
 // slotMutate is the shared pattern for stop/restart: lookup → decode → call.
