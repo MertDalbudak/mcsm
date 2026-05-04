@@ -1,68 +1,85 @@
 #!/usr/bin/env bash
 # Install mcsm on Debian/Ubuntu hosts. Requires root.
-# Usage: sudo ./setup-debian.sh [version]
+# Builds from this checkout — no published binaries yet.
+# Usage:  sudo ./setup-debian.sh
 set -euo pipefail
 
-VERSION="${1:-latest}"
 USER_NAME="mcsm"
 INSTALL_BIN="/usr/local/bin/mcsm"
+TOKENS_BIN="/usr/local/bin/mcsm-tokens"
 CONFIG_DIR="/etc/mcsm"
 DATA_DIR="/var/lib/mcsm"
 LOG_DIR="/var/log/mcsm"
+SHARE_DIR="/usr/share/mcsm"
 SERVICE_FILE="/etc/systemd/system/mcsm.service"
-REPO_RAW="https://github.com/MertDalbudak/mcsm/releases/${VERSION}/download"
+
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 if [[ $EUID -ne 0 ]]; then
-  echo "must run as root" >&2
+  echo "must run as root (use sudo)" >&2
   exit 1
 fi
 
-echo "==> apt: installing dependencies (java, tools)"
+echo "==> apt: installing build + runtime dependencies"
 apt-get update -qq
 apt-get install -y --no-install-recommends \
-    ca-certificates curl tar \
+    ca-certificates curl tar git make build-essential \
+    golang-go \
     openjdk-21-jre-headless
 
 if ! id -u "$USER_NAME" >/dev/null 2>&1; then
-  echo "==> creating user $USER_NAME"
-  useradd --system --home-dir "$DATA_DIR" --create-home --shell /usr/sbin/nologin "$USER_NAME"
+  echo "==> creating system user $USER_NAME"
+  useradd --system --home-dir "$DATA_DIR" --create-home \
+          --shell /usr/sbin/nologin "$USER_NAME"
 fi
 
 echo "==> creating directories"
 install -d -o "$USER_NAME" -g "$USER_NAME" -m 0750 "$CONFIG_DIR" "$DATA_DIR" "$LOG_DIR"
+install -d -m 0755 "$SHARE_DIR"
 
-# Phase 1: binary install left as TODO once releases are published. For
-# now, use `make install` from a checkout.
-if [[ "$VERSION" != "dev" ]]; then
-  echo "==> downloading mcsm $VERSION"
-  ARCH="$(dpkg --print-architecture)"   # amd64 | arm64
-  TMP="$(mktemp -d)"
-  trap 'rm -rf "$TMP"' EXIT
-  curl -fsSL "$REPO_RAW/mcsm-linux-$ARCH.tar.gz" -o "$TMP/mcsm.tgz"
-  tar -xzf "$TMP/mcsm.tgz" -C "$TMP"
-  install -m 0755 "$TMP/mcsm" "$INSTALL_BIN"
-fi
+echo "==> building mcsm binaries"
+cd "$REPO_ROOT"
+make build
+
+echo "==> installing binaries"
+install -m 0755 bin/mcsm        "$INSTALL_BIN"
+install -m 0755 bin/mcsm-tokens "$TOKENS_BIN"
+
+echo "==> installing example config"
+install -m 0644 configs/config.example.yaml "$SHARE_DIR/config.example.yaml"
 
 if [[ ! -f "$CONFIG_DIR/config.yaml" ]]; then
   echo "==> seeding $CONFIG_DIR/config.yaml from example"
   install -o "$USER_NAME" -g "$USER_NAME" -m 0640 \
-      "$(dirname "$0")/../../configs/config.example.yaml" \
-      "$CONFIG_DIR/config.yaml"
-  echo "    edit this file before starting the service."
+      "$SHARE_DIR/config.example.yaml" "$CONFIG_DIR/config.yaml"
 fi
 
 echo "==> installing systemd unit"
-install -m 0644 "$(dirname "$0")/../systemd/mcsm.service" "$SERVICE_FILE"
+install -m 0644 deploy/systemd/mcsm.service "$SERVICE_FILE"
 systemctl daemon-reload
 systemctl enable mcsm.service
 
 cat <<EOF
 
 mcsm installed.
-  config: $CONFIG_DIR/config.yaml
+
+  binary: $INSTALL_BIN
+  tokens: $TOKENS_BIN
+  config: $CONFIG_DIR/config.yaml          (← edit before first start)
   data:   $DATA_DIR
   logs:   journalctl -u mcsm -f
 
-next: edit $CONFIG_DIR/config.yaml, then:
-  sudo systemctl start mcsm
+next steps:
+  1) Generate a real bearer token:
+       echo -n 'your-secret-token' | mcsm-tokens
+     Or pick one for you:
+       mcsm-tokens --random
+     Paste the resulting \$argon2id\$… line into api.tokens[].hash.
+
+  2) Edit discovery.roots, slots, etc. in $CONFIG_DIR/config.yaml.
+
+  3) Start the service:
+       sudo systemctl start mcsm
+       sudo systemctl status mcsm
+       journalctl -u mcsm -f
 EOF

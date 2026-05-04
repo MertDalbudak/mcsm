@@ -1,0 +1,38 @@
+#!/sbin/openrc-run
+# OpenRC init script for mcsm. Install at /etc/init.d/mcsm and enable
+# with `rc-update add mcsm default`.
+
+name="mcsm"
+description="Minecraft Server Monitor (mcsm)"
+description_start="Boot the mcsm daemon"
+description_stop="Send SIGTERM and wait for graceful shutdown of any draining MC processes"
+
+command="/usr/local/bin/mcsm"
+command_args="--config /etc/mcsm/config.yaml"
+command_user="mcsm:mcsm"
+command_background=true
+pidfile="/run/${RC_SVCNAME}.pid"
+
+# Capture stdout/stderr; openrc-run writes them via start-stop-daemon.
+output_log="/var/log/mcsm/out.log"
+error_log="/var/log/mcsm/err.log"
+
+# Generous stop timeout so any draining java children can exit cleanly.
+retry="SIGTERM/60/SIGKILL/10"
+
+# File-descriptor budget for many concurrent log tails / RCON conns / WS clients.
+rc_ulimit="-n 65536"
+
+depend() {
+    need net
+    after firewall
+}
+
+start_pre() {
+    checkpath -d -m 0750 -o mcsm:mcsm /var/lib/mcsm /var/log/mcsm
+    if [ ! -f /etc/mcsm/config.yaml ]; then
+        eerror "Config file /etc/mcsm/config.yaml is missing."
+        eerror "Copy from /usr/share/mcsm/config.example.yaml and edit before starting."
+        return 1
+    fi
+}
