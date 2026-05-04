@@ -12,11 +12,16 @@ import (
 	"syscall"
 	"time"
 
+	"path/filepath"
+
 	"github.com/MertDalbudak/mcsm/internal/api"
+	"github.com/MertDalbudak/mcsm/internal/audit"
 	"github.com/MertDalbudak/mcsm/internal/buildinfo"
 	"github.com/MertDalbudak/mcsm/internal/config"
 	"github.com/MertDalbudak/mcsm/internal/discovery"
 	"github.com/MertDalbudak/mcsm/internal/logging"
+	"github.com/MertDalbudak/mcsm/internal/metrics"
+	"github.com/MertDalbudak/mcsm/internal/peers"
 	"github.com/MertDalbudak/mcsm/internal/slot"
 	"github.com/MertDalbudak/mcsm/internal/system"
 )
@@ -79,11 +84,47 @@ func run() error {
 		}
 	}
 
+	var auditLog *audit.Logger
+	if cfg.Audit.Enabled {
+		l, err := audit.New(filepath.Join(cfg.Instance.DataDir, "audit"), cfg.Audit.Retention)
+		if err != nil {
+			slog.Warn("audit: disabled", "err", err)
+		} else {
+			auditLog = l
+			go auditLog.RunJanitor(ctx)
+		}
+	}
+
+	var metricsCol *metrics.Collectors
+	if cfg.Metrics.Enabled {
+		metricsCol = metrics.NewCollectors()
+		metricsCol.InstanceInfo.Set(1, cfg.Instance.Name, buildinfo.Version)
+	}
+
+	var peerPool *peers.Pool
+	if len(cfg.Peers.Peers) > 0 {
+		peerPool = peers.NewPool(cfg.Peers)
+		if metricsCol != nil {
+			peerPool.SetObserver(func(name string, reachable bool, rttMS int64) {
+				if reachable {
+					metricsCol.PeerReachable.Set(1, name)
+					metricsCol.PeerRTT.Set(float64(rttMS)/1000.0, name)
+				} else {
+					metricsCol.PeerReachable.Set(0, name)
+				}
+			})
+		}
+		go peerPool.Run(ctx)
+	}
+
 	srv, err := api.New(api.Deps{
 		Config:      cfg,
 		Discovery:   disco,
 		Slots:       slotMgr,
 		Temperature: temp,
+		Audit:       auditLog,
+		Metrics:     metricsCol,
+		Peers:       peerPool,
 	})
 	if err != nil {
 		return fmt.Errorf("api: %w", err)

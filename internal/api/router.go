@@ -88,9 +88,15 @@ func (s *Server) register(mux *http.ServeMux) {
 	mux.Handle("PATCH /api/v1/slots/{name}/server/properties",
 		chain(auth, scope("server:admin"))(http.HandlerFunc(s.handleServerPropertiesPatch)))
 
-	// --- Logs (live tail via WS still in Phase 2D) ---
+	// --- Logs ---
 	mux.Handle("GET /api/v1/slots/{name}/server/logs",
 		chain(auth, scope("server:read"))(http.HandlerFunc(s.handleServerLogs)))
+	mux.Handle("GET /api/v1/slots/{name}/server/logs/stream",
+		chain(auth, scope("server:read"))(http.HandlerFunc(s.handleServerLogsStream)))
+
+	// --- Slot lifecycle events WS ---
+	mux.Handle("GET /api/v1/slots/{name}/events",
+		chain(auth, scope("slot:read"))(http.HandlerFunc(s.handleSlotEventsStream)))
 
 	// --- Backups (Phase 3) ---
 	mux.Handle("GET /api/v1/slots/{name}/server/backups",
@@ -108,25 +114,33 @@ func (s *Server) register(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/system/temperature",
 		chain(auth, scope("system:read"))(http.HandlerFunc(s.handleSystemTemperature)))
 	mux.Handle("GET /api/v1/system/resources",
-		chain(auth, scope("system:read"))(notImplemented("GET /api/v1/system/resources")))
+		chain(auth, scope("system:read"))(http.HandlerFunc(s.handleSystemResources)))
 
-	// --- Audit (Phase 2) ---
+	// --- Audit ---
 	mux.Handle("GET /api/v1/audit",
-		chain(auth, scope("audit:read"))(notImplemented("GET /api/v1/audit")))
+		chain(auth, scope("audit:read"))(http.HandlerFunc(s.handleAudit)))
 
-	// --- Peers & federation (Phase 2) ---
+	// --- Peers & federation ---
 	mux.Handle("GET /api/v1/peers",
-		chain(auth, scope("peer:read"))(notImplemented("GET /api/v1/peers")))
+		chain(auth, scope("peer:read"))(http.HandlerFunc(s.handlePeersList)))
 	mux.Handle("POST /api/v1/peers/refresh",
-		chain(auth, scope("peer:read"))(notImplemented("POST /api/v1/peers/refresh")))
+		chain(auth, scope("peer:read"))(http.HandlerFunc(s.handlePeersRefresh)))
 	mux.Handle("GET /api/v1/federation/discovery",
-		chain(auth, scope("discovery:read"))(notImplemented("GET /api/v1/federation/discovery")))
+		chain(auth, scope("discovery:read"))(http.HandlerFunc(s.handleFederationDiscovery)))
 	mux.Handle("GET /api/v1/federation/slots",
-		chain(auth, scope("slot:read"))(notImplemented("GET /api/v1/federation/slots")))
+		chain(auth, scope("slot:read"))(http.HandlerFunc(s.handleFederationSlots)))
 
-	// --- Metrics (Phase 2) ---
+	// --- Metrics ---
 	if s.cfg.Metrics.Enabled {
-		mux.HandleFunc(s.cfg.Metrics.Path, notImplemented("GET "+s.cfg.Metrics.Path))
+		path := s.cfg.Metrics.Path
+		if path == "" {
+			path = "/metrics"
+		}
+		if s.cfg.Metrics.RequireAuth {
+			mux.Handle("GET "+path, chain(auth, scope("metrics:read"))(http.HandlerFunc(s.handleMetrics)))
+		} else {
+			mux.HandleFunc("GET "+path, s.handleMetrics)
+		}
 	}
 
 	// Catch-all so unknown paths get our error envelope rather than the

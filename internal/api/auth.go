@@ -65,6 +65,11 @@ func (a *Authenticator) authenticate(next http.Handler) http.Handler {
 			return
 		}
 		ctx := WithToken(r.Context(), &TokenInfo{Name: tok.name, Scopes: tok.scopes})
+		// Tell outer middleware which token authenticated us. The audit
+		// log uses this; access log + recoverer ignore it.
+		if rec, ok := w.(interface{ SetTokenName(string) }); ok {
+			rec.SetTokenName(tok.name)
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

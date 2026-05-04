@@ -1,7 +1,10 @@
 package api
 
 import (
+	"bufio"
+	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"runtime/debug"
 	"time"
@@ -9,11 +12,37 @@ import (
 	"github.com/MertDalbudak/mcsm/internal/ids"
 )
 
-// statusRecorder wraps ResponseWriter to capture the status code for logging.
+// statusRecorder wraps ResponseWriter to capture the status code for
+// logging and to carry a few values that need to flow back from inner
+// middleware (auth) to outer middleware (audit). Context only flows
+// down; this is the standard pattern for the upward direction.
 type statusRecorder struct {
 	http.ResponseWriter
-	status int
-	bytes  int
+	status    int
+	bytes     int
+	tokenName string // populated by the auth middleware on success
+}
+
+// SetTokenName lets the auth middleware tell outer middleware which
+// token authenticated this request. Audit middleware reads it back.
+func (s *statusRecorder) SetTokenName(name string) { s.tokenName = name }
+
+// Hijack delegates to the underlying ResponseWriter so WebSocket
+// upgrades work through this wrapper. Without this, coder/websocket
+// returns 501 Not Implemented because the wrapped writer doesn't
+// satisfy http.Hijacker.
+func (s *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hj, ok := s.ResponseWriter.(http.Hijacker); ok {
+		return hj.Hijack()
+	}
+	return nil, nil, errors.New("underlying writer does not support hijacking")
+}
+
+// Flush delegates so SSE-style streaming works through the wrapper.
+func (s *statusRecorder) Flush() {
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func (s *statusRecorder) WriteHeader(code int) {

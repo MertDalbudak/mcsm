@@ -1,6 +1,21 @@
 package api
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/MertDalbudak/mcsm/internal/system"
+)
+
+// GET /api/v1/system/resources
+func (s *Server) handleSystemResources(w http.ResponseWriter, r *http.Request) {
+	res, err := system.SampleResources(s.cfg.Instance.DataDir)
+	if err != nil {
+		WriteError(w, r, http.StatusInternalServerError, CodeInternal,
+			err.Error(), nil)
+		return
+	}
+	WriteJSON(w, r, http.StatusOK, res)
+}
 
 type temperatureResp struct {
 	Celsius   float64                  `json:"celsius"`

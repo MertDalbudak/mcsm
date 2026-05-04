@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/MertDalbudak/mcsm/internal/config"
 	"github.com/MertDalbudak/mcsm/internal/discovery"
+	"github.com/MertDalbudak/mcsm/internal/events"
 	"github.com/MertDalbudak/mcsm/internal/lock"
+	"github.com/MertDalbudak/mcsm/internal/logtail"
 	"github.com/MertDalbudak/mcsm/internal/process"
 	"github.com/MertDalbudak/mcsm/internal/rcon"
 	"github.com/MertDalbudak/mcsm/internal/serverid"
@@ -68,6 +71,8 @@ type Slot struct {
 	mountedID   string
 	cancelCtx   context.CancelFunc
 	slp         *SLPInfo
+	tailer      *logtail.Tailer
+	bus         *events.Bus // always non-nil, even when idle (created in New)
 
 	// Stop coordination:
 	stopOnce sync.Once
@@ -84,7 +89,21 @@ func New(cfg config.Slot, instanceName, host string, disco *discovery.Store) *Sl
 		disco:        disco,
 		state:        StateIdle,
 		stateSince:   time.Now().UTC(),
+		bus:          events.NewBus(),
 	}
+}
+
+// Events returns the slot's event bus. Subscribers receive state
+// transitions and gameplay events for as long as the slot is alive
+// (the bus survives mount/unmount cycles).
+func (s *Slot) Events() *events.Bus { return s.bus }
+
+// Tailer returns the active log tailer, or nil when the slot is idle.
+// Used by handlers that want to subscribe to live log streams.
+func (s *Slot) Tailer() *logtail.Tailer {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.tailer
 }
 
 // Name returns the slot's configured name.
@@ -147,6 +166,11 @@ func (s *Slot) transition(to State, lastErr *LastError) {
 		"from", from,
 		"to", to,
 	)
+	s.bus.Publish(events.Event{
+		Type: events.TypeState,
+		From: string(from),
+		To:   string(to),
+	})
 }
 
 // StartOptions controls a Start call.
@@ -249,6 +273,7 @@ func (s *Slot) Start(ctx context.Context, opts StartOptions) (Snapshot, error) {
 	}
 
 	bgCtx, cancel := context.WithCancel(context.Background())
+	tailer := logtail.NewTailer(filepath.Join(srv.Path, "logs", "latest.log"), 5000)
 
 	s.mu.Lock()
 	s.server = srv
@@ -262,11 +287,14 @@ func (s *Slot) Start(ctx context.Context, opts StartOptions) (Snapshot, error) {
 	s.state = StateStarting
 	s.stateSince = time.Now().UTC()
 	s.slp = nil
+	s.tailer = tailer
 	s.mu.Unlock()
 
 	go s.watchExit()
 	go s.healthLoop(bgCtx)
 	go s.rconConnectLoop(bgCtx, rconPort, pass)
+	go tailer.Run(bgCtx)
+	go s.detectGameplayEvents(bgCtx, tailer)
 
 	slog.Info("slot: mounted",
 		"slot", s.cfg.Name,
@@ -474,6 +502,52 @@ func (s *Slot) Command(ctx context.Context, cmd string) (string, error) {
 		return "", fmt.Errorf("rcon: not connected")
 	}
 	return rc.Cmd(ctx, cmd)
+}
+
+// detectGameplayEvents subscribes to the tailer and emits player_join /
+// player_leave events on the slot bus. The Vanilla / Paper log format
+// for these is well-known:
+//
+//	[12:00:01] [Server thread/INFO]: Steve joined the game
+//	[12:00:01] [Server thread/INFO]: Steve left the game
+//
+// We only look at INFO entries from "Server thread" to avoid being
+// fooled by player chat that happens to contain "joined the game".
+func (s *Slot) detectGameplayEvents(ctx context.Context, t *logtail.Tailer) {
+	sub := t.Subscribe(64)
+	defer t.Unsubscribe(sub)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case e, ok := <-sub:
+			if !ok {
+				return
+			}
+			if e.Level != "INFO" || e.Thread != "Server thread" {
+				continue
+			}
+			msg := e.Message
+			switch {
+			case len(msg) > 17 && hasSuffix(msg, " joined the game"):
+				s.bus.Publish(events.Event{
+					Type:   events.TypePlayerJoin,
+					Player: msg[:len(msg)-len(" joined the game")],
+					At:     e.TS,
+				})
+			case len(msg) > 15 && hasSuffix(msg, " left the game"):
+				s.bus.Publish(events.Event{
+					Type:   events.TypePlayerLeave,
+					Player: msg[:len(msg)-len(" left the game")],
+					At:     e.TS,
+				})
+			}
+		}
+	}
+}
+
+func hasSuffix(s, suffix string) bool {
+	return len(s) >= len(suffix) && s[len(s)-len(suffix):] == suffix
 }
 
 // watchExit blocks on the process exit channel and updates state.

@@ -13,8 +13,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/MertDalbudak/mcsm/internal/audit"
 	"github.com/MertDalbudak/mcsm/internal/config"
 	"github.com/MertDalbudak/mcsm/internal/discovery"
+	"github.com/MertDalbudak/mcsm/internal/metrics"
+	"github.com/MertDalbudak/mcsm/internal/peers"
 	"github.com/MertDalbudak/mcsm/internal/slot"
 	"github.com/MertDalbudak/mcsm/internal/system"
 )
@@ -28,6 +31,9 @@ type Server struct {
 	disco     *discovery.Store
 	slotMgr   *slot.Manager
 	temp      *system.Temperature // nil if not configured
+	audit     *audit.Logger       // nil if disabled
+	metrics   *metrics.Collectors // nil if disabled
+	peers     *peers.Pool         // nil if no peers configured
 	startedAt time.Time
 	ready     atomic.Bool
 
@@ -39,7 +45,10 @@ type Deps struct {
 	Config      *config.Config
 	Discovery   *discovery.Store
 	Slots       *slot.Manager
-	Temperature *system.Temperature // optional; nil disables /system/temperature
+	Temperature *system.Temperature
+	Audit       *audit.Logger
+	Metrics     *metrics.Collectors
+	Peers       *peers.Pool
 }
 
 // New constructs the Server but does not bind a port. Call Run.
@@ -54,6 +63,9 @@ func New(deps Deps) (*Server, error) {
 		disco:     deps.Discovery,
 		slotMgr:   deps.Slots,
 		temp:      deps.Temperature,
+		audit:     deps.Audit,
+		metrics:   deps.Metrics,
+		peers:     deps.Peers,
 		startedAt: time.Now().UTC(),
 	}, nil
 }
@@ -65,8 +77,9 @@ func (s *Server) Run(ctx context.Context, shutdownTimeout time.Duration) error {
 	s.register(mux)
 
 	// Order matters: requestID must be outermost so the trace id exists
-	// for both recoverer (panic logs) and accessLog.
-	handler := chain(requestID, recoverer, accessLog)(mux)
+	// for both recoverer (panic logs) and accessLog. The audit middleware
+	// runs innermost so it sees the final response status.
+	handler := chain(requestID, recoverer, accessLog, s.auditMiddleware)(mux)
 
 	s.httpServer = &http.Server{
 		Addr:              s.cfg.API.Bind,
