@@ -16,10 +16,10 @@ BIN := bin/mcsm
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-12s %s\n", $$1, $$2}'
 
-build: ## Build the mcsm + mcsm-tokens binaries into bin/
+build: ## Build the mcsm + mcsm-tokens binaries into bin/ (static, CGO off)
 	@mkdir -p bin
-	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/mcsm
-	go build -trimpath -ldflags "$(LDFLAGS)" -o bin/mcsm-tokens ./cmd/mcsm-tokens
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/mcsm
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/mcsm-tokens ./cmd/mcsm-tokens
 
 run: build ## Build then run with configs/config.example.yaml
 	$(BIN) --config configs/config.example.yaml

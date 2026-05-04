@@ -18,25 +18,17 @@ Every documented v1 endpoint is real. Test coverage across 16 packages.
 
 ## Install
 
-### Alpine LXC / bare host (OpenRC)
+### Any Linux distro (one script)
 
 ```sh
 git clone https://github.com/MertDalbudak/mcsm
 cd mcsm
-sudo ./deploy/install/setup-alpine.sh
+sudo ./deploy/install/setup.sh
 ```
 
-The script installs build + runtime deps (`go`, `make`, `openjdk21-jre-headless`, `tini`), builds the binary, installs the OpenRC service + example config, and adds `mcsm` to the default runlevel.
+The script auto-detects your distro family (Alpine, Debian/Ubuntu, Arch, Fedora/RHEL, openSUSE) and init system (systemd or OpenRC), installs build + runtime deps (Go, make, JDK 21), builds the binaries with CGO disabled (fully static), drops the right service file, and registers it for boot.
 
-### Debian / Ubuntu (systemd)
-
-```sh
-git clone https://github.com/MertDalbudak/mcsm
-cd mcsm
-sudo ./deploy/install/setup-debian.sh
-```
-
-Installs build deps, `openjdk-21-jre-headless`, builds, drops the systemd unit, enables it.
+Supports the common derivatives via `ID_LIKE` in `/etc/os-release` — Manjaro, Mint, Pop, Rocky, AlmaLinux, etc. all work without modification.
 
 ### Docker
 
@@ -48,15 +40,17 @@ docker run --rm -p 8124:8124 \
   mcsm:latest
 ```
 
-### Manual local dev build
+### Manual / dev build
+
+If you don't want to install as a service:
 
 ```sh
-apk add --no-cache make go git build-base   # Alpine
-# OR: apt install -y make golang-go git build-essential   # Debian
-make build
-./bin/mcsm --config configs/config.example.yaml
+make build                                              # → bin/mcsm + bin/mcsm-tokens
+./bin/mcsm --config configs/config.example.yaml         # foreground
 curl http://localhost:8124/healthz
 ```
+
+You'll need `go`, `make`, `git`, and a JDK 21 on your `PATH` for any Minecraft server to actually launch.
 
 ## After install — generate a token
 
