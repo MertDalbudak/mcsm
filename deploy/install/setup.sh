@@ -173,6 +173,23 @@ create_user() {
 build_binaries() {
     echo "==> building mcsm binaries"
     cd "$REPO_ROOT"
+
+    # Some distros (notably Alpine's go package) hard-pin GOTOOLCHAIN=local,
+    # which blocks `go` from auto-downloading the version go.mod asks for.
+    # If the system Go is older than what we need, override to `auto` so
+    # the build can fetch the right toolchain over the network.
+    needed_minor=22
+    if command -v go >/dev/null 2>&1; then
+        ver="$(go version | awk '{print $3}' | sed 's/^go//')"
+        major="$(echo "$ver" | cut -d. -f1)"
+        minor="$(echo "$ver" | cut -d. -f2)"
+        if [ "${major:-0}" -lt 1 ] || \
+           { [ "${major:-0}" -eq 1 ] && [ "${minor:-0}" -lt "$needed_minor" ]; }; then
+            echo "    system go is ${ver}; need >= 1.${needed_minor}"
+            echo "    setting GOTOOLCHAIN=auto so go fetches the required version"
+            export GOTOOLCHAIN=auto
+        fi
+    fi
     make build
 }
 

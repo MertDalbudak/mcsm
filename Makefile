@@ -18,8 +18,13 @@ help:
 
 build: ## Build the mcsm + mcsm-tokens binaries into bin/ (static, CGO off)
 	@mkdir -p bin
-	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/mcsm
-	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/mcsm-tokens ./cmd/mcsm-tokens
+	# GOTOOLCHAIN=auto lets `go` fetch the version go.mod requires when the
+	# system go is older (e.g. Alpine 3.19 ships go 1.21 but pins
+	# GOTOOLCHAIN=local). Set GOTOOLCHAIN=local in the env to disable.
+	GOTOOLCHAIN=$${GOTOOLCHAIN:-auto} CGO_ENABLED=0 \
+		go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/mcsm
+	GOTOOLCHAIN=$${GOTOOLCHAIN:-auto} CGO_ENABLED=0 \
+		go build -trimpath -ldflags "$(LDFLAGS)" -o bin/mcsm-tokens ./cmd/mcsm-tokens
 
 run: build ## Build then run with configs/config.example.yaml
 	$(BIN) --config configs/config.example.yaml
