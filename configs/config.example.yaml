@@ -1,0 +1,90 @@
+# mcsm — instance config
+# Copy to /etc/mcsm/config.yaml and edit before starting the daemon.
+# All durations accept Go-style strings ("30s", "5m", "2h") or integer seconds.
+
+instance:
+  # Lowercase, [a-z0-9-], 1-64 chars. Must be unique across a federation.
+  name: node-a
+  # Where mcsm stores audit log, ephemeral state, etc.
+  data_dir: /var/lib/mcsm
+
+api:
+  # host:port. Use 127.0.0.1:8124 if you reverse-proxy.
+  bind: 0.0.0.0:8124
+
+  # Tokens are stored as argon2id PHC strings. Generate with:
+  #   mcsm tokens new --name mcsw --scopes "*"   (TODO subcommand)
+  # The hash field never holds plaintext.
+  tokens:
+    - name: mcsw
+      hash: "$argon2id$v=19$m=65536,t=3,p=2$REPLACEME$REPLACEME"
+      scopes: ["*"]
+      rate_limit:
+        per_minute: 600          # 0 = unlimited
+
+  # CORS — leave allowed_origins empty if your client proxies through its
+  # own backend (recommended). Only populate if a browser calls mcsm directly.
+  cors:
+    allowed_origins: []
+    allow_credentials: true
+    max_age: 10m
+
+  # Built-in TLS. Leave the whole tls block out and run plain HTTP behind a
+  # reverse proxy (recommended for production).
+  # tls:
+  #   cert_file: /etc/mcsm/tls/fullchain.pem
+  #   key_file:  /etc/mcsm/tls/privkey.pem
+  #   min_version: "1.2"
+  #   hsts_max_age: 31536000
+
+  # When true, /version and /openapi.json are unauthenticated.
+  public_meta: true
+
+discovery:
+  # Parent directories scanned for Minecraft server installs.
+  # A directory is considered a server if it contains .mcsm/config.yaml.
+  roots:
+    - /mnt/servers
+  scan_interval: 60s
+
+slots:
+  - name: creative
+    port: 25565
+    public_address: mc.example.com
+    # auto_mount: <server-uuid>     # mount on boot if free
+    accepts:
+      types: [paper, vanilla, fabric]   # empty list = any
+      max_memory_mb: 8192               # 0 = no cap
+  - name: survival
+    port: 25566
+    public_address: mc.example.com
+
+# Optional: list of other mcsm instances for federation. Each peer needs a
+# token issued by *that* peer with at least:
+#   discovery:read slot:read server:read peer:read
+peers:
+  peers: []
+    # - name: node-b
+    #   url: https://node-b.internal:8124
+    #   token: ${MCSM_PEER_TOKEN_NODE_B}
+  ping_interval: 30s
+  timeout: 5s
+
+system:
+  temperature:
+    sensor: /sys/class/thermal/thermal_zone0/temp
+    policy: /etc/mcsm/temp-policy.yaml
+
+logging:
+  level: info               # debug | info | warn | error
+  format: json              # json | text  (text is friendlier for tty)
+  output: stdout            # stdout | stderr | <path>
+
+audit:
+  enabled: true
+  retention: 30d
+
+metrics:
+  enabled: true
+  path: /metrics
+  require_auth: false       # set true to require a "metrics:read" scoped token
