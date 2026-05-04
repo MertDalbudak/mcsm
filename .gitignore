@@ -12,6 +12,10 @@
 /.env
 /.env.*
 !/.env.example
+deploy/docker/.env
+deploy/docker/docker-compose.yml
+!deploy/docker/.env.example
+!deploy/docker/docker-compose.example.yml
 
 # TLS material
 /deploy/docker/tls/

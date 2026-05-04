@@ -18,7 +18,7 @@ Every documented v1 endpoint is real. Test coverage across 16 packages.
 
 ## Install
 
-### Any Linux distro (one script)
+### Bare host / LXC — one interactive script
 
 ```sh
 git clone https://github.com/MertDalbudak/mcsm
@@ -26,23 +26,32 @@ cd mcsm
 sudo ./deploy/install/setup.sh
 ```
 
-The script auto-detects your distro family (Alpine, Debian/Ubuntu, Arch, Fedora/RHEL, openSUSE) and init system (systemd or OpenRC), installs build + runtime deps (Go, make, JDK 21), builds the binaries with CGO disabled (fully static), drops the right service file, and registers it for boot.
+The script:
 
-Supports the common derivatives via `ID_LIKE` in `/etc/os-release` — Manjaro, Mint, Pop, Rocky, AlmaLinux, etc. all work without modification.
+1. Auto-detects your distro family (Alpine, Debian/Ubuntu, Arch, Fedora/RHEL, openSUSE — and common derivatives via `ID_LIKE`).
+2. Auto-detects the init system (systemd or OpenRC).
+3. Installs build + runtime deps (Go ≥ 1.23 via `GOTOOLCHAIN=auto` if your system Go is older, JDK 21).
+4. Builds the binaries (`mcsm`, `mcsm-tokens`) with CGO disabled — fully static.
+5. **Prompts you** for the basics: instance name, discovery root, one slot (name + port + optional public address), and CPU temperature sensor.
+6. **Generates a bearer token**, prints the plaintext one time, writes the argon2id hash into `/etc/mcsm/config.yaml`.
+7. Drops the right service file and registers it for boot.
 
-### Docker
+Pass `--no-config` to skip the wizard and just install the example config (you'll edit it later). Pass `--keep-config` to preserve an existing `/etc/mcsm/config.yaml`.
+
+### Docker — env-file driven
 
 ```sh
-make docker
-docker run --rm -p 8124:8124 \
-  -v $PWD/configs:/etc/mcsm:ro \
-  -v /mnt/servers:/mnt/servers \
-  mcsm:latest
+cd deploy/docker
+cp .env.example .env
+$EDITOR .env                       # set MCSM_API_TOKEN at minimum
+docker compose -f docker-compose.example.yml up -d
 ```
 
-### Manual / dev build
+The container's entrypoint renders `/etc/mcsm/config.yaml` from `MCSM_*` env vars at startup, hashing the plaintext token from `MCSM_API_TOKEN` with `mcsm-tokens` before writing. For multi-slot setups, mount your own `config.yaml` into the container — the entrypoint respects an existing file (set `MCSM_RENDER_CONFIG=force` to override).
 
-If you don't want to install as a service:
+See [`deploy/docker/.env.example`](deploy/docker/.env.example) for every supported variable.
+
+### Manual / dev build
 
 ```sh
 make build                                              # → bin/mcsm + bin/mcsm-tokens
@@ -52,21 +61,16 @@ curl http://localhost:8124/healthz
 
 You'll need `go`, `make`, `git`, and a JDK 21 on your `PATH` for any Minecraft server to actually launch.
 
-## After install — generate a token
+## Generating tokens manually
 
-The example config ships with an unusable placeholder hash. Generate a real one:
+Both flows above generate the token automatically, but if you ever need another one:
 
 ```sh
-# Pipe a secret you choose:
-echo -n 'your-secret-token' | mcsm-tokens
-
-# Or have one generated for you (prints both plaintext and hash):
-mcsm-tokens --random
+echo -n 'your-secret-token' | mcsm-tokens     # hash a token you chose
+mcsm-tokens --random                          # generate + hash a random one
 ```
 
-Paste the `$argon2id$v=19$...` line into `api.tokens[0].hash` in `/etc/mcsm/config.yaml`. The plaintext goes to your client (`mcsw` or `curl`).
-
-Then start the service:
+Then start (or restart) the service:
 
 ```sh
 # Alpine

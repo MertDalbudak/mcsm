@@ -1,5 +1,8 @@
-# Example: one MCSM instance with two slots, sharing a server pool from
-# the host. Copy to docker-compose.yml and edit before using.
+# Minimal mcsm container — env-driven config (see .env.example).
+# Copy this file to docker-compose.yml and .env.example to .env, then edit .env.
+#
+# For multi-slot setups: skip the .env approach and mount your own
+# config.yaml at /etc/mcsm/config.yaml (the entrypoint respects it).
 
 services:
   mcsm:
@@ -9,18 +12,28 @@ services:
       dockerfile: deploy/docker/Dockerfile
       args:
         VERSION: "2.0.0-dev"
-    container_name: mcsm-node-a
+    container_name: mcsm
     restart: unless-stopped
-    ports:
-      - "8124:8124"     # API
-      - "25565:25565"   # slot "creative"
-      - "25566:25566"   # slot "survival"
-    volumes:
-      - ./config:/etc/mcsm:ro
-      - ./data:/var/lib/mcsm
-      - /mnt/servers:/mnt/servers           # shared server pool
+
+    # All MCSM_* settings come from .env. The container's entrypoint
+    # turns them into /etc/mcsm/config.yaml at startup (and hashes the
+    # plaintext token with mcsm-tokens before writing).
+    env_file:
+      - .env
     environment:
       TZ: "Europe/Berlin"
+
+    ports:
+      - "8124:8124"
+      # Re-expose the slot port using whatever you set in .env.
+      - "${MCSM_SLOT_PORT:-25565}:${MCSM_SLOT_PORT:-25565}"
+
+    volumes:
+      # Persist audit log + heartbeats. (Comment out if ephemeral is fine.)
+      - ./data:/var/lib/mcsm
+      # Your Minecraft server folders. Adjust the host path.
+      - /mnt/servers:/mnt/servers
+
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8124/healthz"]
       interval: 30s

@@ -19,12 +19,13 @@ ARG BUILD_DATE=unknown
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux \
-    go build -trimpath -ldflags "\
+    sh -c 'go build -trimpath -ldflags "\
         -s -w \
         -X github.com/MertDalbudak/mcsm/internal/buildinfo.Version=${VERSION} \
         -X github.com/MertDalbudak/mcsm/internal/buildinfo.Commit=${COMMIT} \
         -X github.com/MertDalbudak/mcsm/internal/buildinfo.Date=${BUILD_DATE}" \
-        -o /out/mcsm ./cmd/mcsm
+        -o /out/mcsm ./cmd/mcsm && \
+        go build -trimpath -ldflags "-s -w" -o /out/mcsm-tokens ./cmd/mcsm-tokens'
 
 # ---------- runtime stage ----------
 # Temurin JRE base — needed because mcsm spawns Java for each Minecraft server.
@@ -36,7 +37,10 @@ RUN apk add --no-cache ca-certificates tzdata curl tini && \
     mkdir -p /etc/mcsm /var/lib/mcsm && \
     chown -R mcsm:mcsm /etc/mcsm /var/lib/mcsm
 
-COPY --from=build /out/mcsm /usr/local/bin/mcsm
+COPY --from=build /out/mcsm        /usr/local/bin/mcsm
+COPY --from=build /out/mcsm-tokens /usr/local/bin/mcsm-tokens
+COPY deploy/docker/entrypoint.sh   /usr/local/bin/mcsm-entrypoint
+RUN chmod +x /usr/local/bin/mcsm-entrypoint
 
 USER mcsm
 
@@ -44,5 +48,7 @@ EXPOSE 8124
 VOLUME ["/etc/mcsm", "/var/lib/mcsm"]
 
 # tini is PID 1 so signals reach mcsm and orphaned java children are reaped.
-ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/mcsm"]
-CMD ["--config", "/etc/mcsm/config.yaml"]
+# The entrypoint script renders /etc/mcsm/config.yaml from MCSM_* env
+# vars unless one is mounted in. Pass `--no-config` (via cmd) is unused;
+# operators can override CMD if they want a different invocation.
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/mcsm-entrypoint"]
